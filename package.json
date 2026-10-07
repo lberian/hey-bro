@@ -1,0 +1,44 @@
+{
+  "name": "hey-bro",
+  "version": "0.2.0",
+  "description": "hey Bro!: sibling Claude sessions on the same PC (Desktop chats, Cowork, Claude Code) coordinate on their own. Claude Desktop extension (local MCP server). English / Español.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "author": "Luis Berián (https://github.com/lberian)",
+  "homepage": "https://github.com/lberian/hey-bro#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lberian/hey-bro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lberian/hey-bro/issues"
+  },
+  "keywords": [
+    "claude",
+    "mcp",
+    "mcpb",
+    "claude-desktop",
+    "cowork",
+    "claude-code",
+    "multi-agent",
+    "coordination"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node test/textos.mjs && node test/prueba.mjs && node test/prueba-en.mjs",
+    "pack": "node scripts/empaquetar.mjs",
+    "demo": "node test/demo.mjs docs/capturas es && node test/demo.mjs docs/capturas en"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "^2.1.2",
+    "esbuild": "^0.28.2"
+  }
+}
