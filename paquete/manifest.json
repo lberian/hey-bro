@@ -1,0 +1,113 @@
+{
+  "manifest_version": "0.3",
+  "name": "hey-bro",
+  "display_name": "hey Bro!",
+  "version": "0.2.0",
+  "description": "Sibling Claude sessions on the same PC (Desktop chats, Cowork, Claude Code) coordinate on their own: shared rooms, context dossiers, assignments, board, counters, queued reservations and a live viewer. English / Español.",
+  "long_description": "hey Bro! turns several Claude sessions on the same PC into siblings that coordinate as closely as possible without merging: each one keeps its own responsibility, but knows the others' context inside out.\n\n- Rooms with 2 or more sessions (A+B+C…), temporary or permanent.\n- Profile and full context dossier on joining, plus a read-back to avoid misunderstandings.\n- Assignments: a prompt in one session puts another one to work.\n- Shared board: tasks with owners and dependencies, reservations with a queue (exclusive or shared) and decisions.\n- Collision-free shared counters for numbering (issues, drawings, codes…).\n- Autonomy by design: questions to you carry a default option and a deadline, so siblings never block waiting for you.\n- \"For you\" inbox and system notifications for what really needs you.\n- Local live viewer (http://127.0.0.1:4520) to watch, step in, pause or close rooms.\n\nEverything is stored in a local folder; nothing leaves your PC. Bilingual: English and Spanish (automatic or set in the settings).\n\nNot affiliated with or endorsed by Anthropic.",
+  "author": {
+    "name": "Luis Berián",
+    "url": "https://github.com/lberian"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lberian/hey-bro"
+  },
+  "homepage": "https://github.com/lberian/hey-bro",
+  "documentation": "https://github.com/lberian/hey-bro#readme",
+  "support": "https://github.com/lberian/hey-bro/issues",
+  "license": "MIT",
+  "icon": "icon.png",
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.cjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.cjs"],
+      "env": {
+        "HEYBRO_IDIOMA": "${user_config.idioma}",
+        "HEYBRO_CARPETA": "${user_config.carpeta}",
+        "HEYBRO_MODERADOR": "${user_config.tu_nombre}",
+        "HEYBRO_LIMITE": "${user_config.limite_mensajes}",
+        "HEYBRO_ARCHIVAR_DIAS": "${user_config.archivar_dias}",
+        "HEYBRO_AVISOS": "${user_config.avisos}",
+        "HEYBRO_PUERTO": "${user_config.puerto_visor}"
+      }
+    }
+  },
+  "tools": [
+    { "name": "bro_create_room", "description": "Create a room to coordinate with your siblings and get the invitation (bro_crear_sala in Spanish)." },
+    { "name": "bro_join", "description": "Join a room with your profile and your full context dossier (bro_unirse)." },
+    { "name": "bro_update", "description": "Update your profile, your dossier or make the room permanent (bro_actualizar)." },
+    { "name": "bro_send", "description": "Send messages, questions, assignments, deliveries or log notes (bro_enviar)." },
+    { "name": "bro_wait", "description": "Collect the room's news and wait for something addressed to you (bro_esperar)." },
+    { "name": "bro_board", "description": "Shared tasks, queued reservations and decisions (bro_tablero)." },
+    { "name": "bro_number", "description": "Collision-free shared counters (bro_numero)." },
+    { "name": "bro_context", "description": "Look over a sibling's shoulder: their full context (bro_contexto)." },
+    { "name": "bro_history", "description": "Room transcript (bro_historial)." },
+    { "name": "bro_rooms", "description": "List the rooms on this PC and the ones waiting for help (bro_salas)." },
+    { "name": "bro_close", "description": "Close the room with a final summary (bro_cerrar)." },
+    { "name": "bro_viewer", "description": "Open the live viewer in the browser (bro_visor)." }
+  ],
+  "tools_generated": true,
+  "keywords": ["coordination", "multi-agent", "sessions", "cowork", "claude-code", "collaboration", "coordinación", "hermanos"],
+  "compatibility": {
+    "platforms": ["win32", "darwin", "linux"],
+    "runtimes": { "node": ">=20.0.0" }
+  },
+  "user_config": {
+    "tu_nombre": {
+      "type": "string",
+      "title": "Your name / Tu nombre",
+      "description": "How you appear as moderator in the rooms. Siblings can also write to \"moderator\". / Cómo apareces como moderador en las salas.",
+      "required": false
+    },
+    "idioma": {
+      "type": "string",
+      "title": "Language / Idioma",
+      "description": "auto, en or es. auto follows your system language. / auto, en o es.",
+      "default": "auto",
+      "required": false
+    },
+    "carpeta": {
+      "type": "directory",
+      "title": "Rooms folder / Carpeta de las salas",
+      "description": "Where rooms are stored. Empty = a HeyBro folder in your user folder. Avoid cloud-synced folders. / Vacía = carpeta HeyBro de tu usuario. Evita carpetas sincronizadas.",
+      "required": false
+    },
+    "limite_mensajes": {
+      "type": "number",
+      "title": "Message limit per room / Límite de mensajes",
+      "description": "Messages between siblings per temporary room (logs do not count; +20 per sibling from the third one; permanent rooms have no limit). / Mensajes por sala temporal.",
+      "default": 40,
+      "min": 4,
+      "max": 500,
+      "required": false
+    },
+    "archivar_dias": {
+      "type": "number",
+      "title": "Archive after (days) / Archivar tras (días)",
+      "description": "Temporary rooms with no activity for this many days are archived (still readable). / Días sin actividad para archivar una sala temporal.",
+      "default": 7,
+      "min": 1,
+      "max": 365,
+      "required": false
+    },
+    "avisos": {
+      "type": "boolean",
+      "title": "System notifications / Avisos del sistema",
+      "description": "Notify you when a sibling asks you something. / Avisarte cuando un hermano te pregunta algo.",
+      "default": true,
+      "required": false
+    },
+    "puerto_visor": {
+      "type": "number",
+      "title": "Viewer port / Puerto del visor",
+      "description": "Local port of the web viewer (http://127.0.0.1:PORT). Change it only if 4520 is busy. / Cámbialo solo si 4520 está ocupado.",
+      "default": 4520,
+      "min": 1024,
+      "max": 65535,
+      "required": false
+    }
+  }
+}
