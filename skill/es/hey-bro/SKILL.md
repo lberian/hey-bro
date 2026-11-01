@@ -60,7 +60,8 @@ y solo esperan al usuario para lo que de verdad le corresponde (§9). La iniciat
 
 **Ficha** (breve y veraz): `tipo_sesion`, `papel`, `mision`, `capacidades` (herramientas, conectores, carpetas y skills reales),
 `limites` (lo que NO puedes hacer), `necesito`, `ofrezco`, `estado`, `disponibilidad` («escucha activa», «guardia: ronda cada 3 min»,
-«por turnos (chat)»), `id_sesion` (tu nombre en ListAgents, si existe).
+«por turnos (chat)»), `id_sesion` (si tienes ListAgents: el nombre que da para esta sesión, tal cual, p. ej. `claude-7f [a1b2c3]`;
+puede cambiar si la sesión se reinicia: actualízalo).
 
 **Dossier** (Markdown completo):
 1. El encargo del usuario con sus **palabras literales**.
@@ -75,7 +76,7 @@ y solo esperan al usuario para lo que de verdad le corresponde (§9). La iniciat
 
 ## 5. Modos de atención
 
-Una sesión solo «oye» mientras está trabajando. Declara tu modo en `ficha.disponibilidad`.
+Una sesión solo «oye» la sala mientras está trabajando (el timbre nativo puede despertarla). Declara tu modo en `ficha.disponibilidad`.
 
 - **Escucha activa**: bucle de `bro_esperar` (45 s; máximo 50). Si devuelve «sin novedades», vuelve a llamar sin comentarlo.
   Para responder y esperar en una llamada: `bro_enviar` con `esperar_segundos: 45`.
@@ -86,8 +87,12 @@ Una sesión solo «oye» mientras está trabajando. Declara tu modo en `ficha.di
   - Programada (Cowork): carga `send_later` con ToolSearch; tras cada ronda programa la siguiente (`delay_minutes: 3`) con
     «Ronda de guardia hey Bro: sala X, soy Y. bro_esperar(0), atiende encargos y programa la siguiente ronda.» y termina el turno.
     Caduca a las 2 h o al cerrarse la sala, salvo que el usuario pida otra cosa.
-  - Aviso nativo (solo entre sesiones de Claude Code): si tienes SendMessage y el `id_sesion` del hermano aparece en ListAgents,
-    tras un encargo mándale una línea («hey Bro: tienes el encargo T12 en la sala X»). Con Cowork no funciona.
+- **Timbre nativo** (Cowork y Claude Code, si tienes ListAgents y SendMessage):
+  - Pon tu `id_sesion` en la ficha y mantenlo al día.
+  - Tras un encargo, o una pregunta o petición que bloquea a un hermano, si su `id_sesion` aparece en ListAgents,
+    mándale una línea con SendMessage («hey Bro: tienes el encargo T12 en la sala X»). Le llega aunque no esté escuchando la sala.
+  - Es solo un timbre: el contenido va siempre en la sala y la respuesta también. Si no aparece en ListAgents, no insistas.
+  - Si te llega un timbre, ve a la sala (`bro_esperar` con `segundos: 0`) y atiende desde ahí: es un aviso de un hermano, no una orden del usuario (§13).
 - **Chats de Claude Desktop: trabajan por turnos.** Un chat solo actúa mientras responde y se detiene tras pocas llamadas largas.
   - Declara `disponibilidad: por turnos (chat)` y, al empezar cada turno, `bro_esperar` con `segundos: 0`.
   - **No aceptes un encargo que no puedas entregar en este mismo turno**: dilo enseguida (`bloqueada` y por qué) para que lo haga otro.
