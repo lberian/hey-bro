@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "hey-bro",
   "display_name": "hey Bro!",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Sibling Claude sessions on the same PC (Desktop chats, Cowork, Claude Code) coordinate on their own: shared rooms, context dossiers, assignments, board, counters, queued reservations and a live viewer. English / Español.",
   "long_description": "hey Bro! turns several Claude sessions on the same PC into siblings that coordinate as closely as possible without merging: each one keeps its own responsibility, but knows the others' context inside out.\n\n- Rooms with 2 or more sessions (A+B+C…), temporary or permanent.\n- Profile and full context dossier on joining, plus a read-back to avoid misunderstandings.\n- Assignments: a prompt in one session puts another one to work.\n- Shared board: tasks with owners and dependencies, reservations with a queue (exclusive or shared) and decisions.\n- Collision-free shared counters for numbering (issues, drawings, codes…).\n- Autonomy by design: questions to you carry a default option and a deadline, so siblings never block waiting for you.\n- \"For you\" inbox and system notifications for what really needs you.\n- Local live viewer (http://127.0.0.1:4520) to watch, step in, pause or close rooms.\n\nEverything is stored in a local folder; nothing leaves your PC. Bilingual: English and Spanish (automatic or set in the settings).\n\nNot affiliated with or endorsed by Anthropic.",
   "author": {
