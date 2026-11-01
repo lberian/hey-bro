@@ -61,6 +61,12 @@ async function main() {
   ok(/en curso/.test(r.texto) && /bitácora de Revisor/.test(r.texto) && /Añadido al dossier/.test(r.texto), 'A ve el progreso de B (tarea, bitácora, dossier)', r.texto);
   r = await B.llamar('bro_enviar', { sala: SALA, yo: 'Revisor', para: 'Redactor', clase: 'entrega', texto: 'Hecho: 3 erratas corregidas.', tarea: { id: T, estado: 'hecha' } });
   ok(!r.error && new RegExp(`${T} → hecha`).test(r.texto), 'entrega y cierre de la tarea en una llamada', r.texto);
+  await B.llamar('bro_actualizar', { sala: SALA, yo: 'Revisor', ficha: { id_sesion: 'claude-7f [a1b2c3]' } });
+  r = await A.llamar('bro_enviar', { sala: SALA, yo: 'Redactor', para: 'Revisor', clase: 'pregunta', texto: '¿Te falta mucho con la portada?' });
+  ok(!r.error && /«claude-7f \[a1b2c3\]» aparece en ListAgents/.test(r.texto), 'pregunta a un hermano con id_sesion: sugiere el timbre nativo', r.texto);
+  r = await A.llamar('bro_enviar', { sala: SALA, yo: 'Redactor', para: 'Revisor', clase: 'mensaje', texto: 'Sin prisa, por cierto.' });
+  ok(!r.error && !/ListAgents/.test(r.texto), 'un mensaje normal no sugiere el timbre', r.texto);
+  await B.llamar('bro_esperar', { sala: SALA, yo: 'Revisor', segundos: 0 }); // B lee la pregunta y el mensaje
 
   console.log('4. Reservas exclusivas, compartidas y cola');
   r = await A.llamar('bro_tablero', { sala: SALA, yo: 'Redactor', nuevo: { tipo: 'reserva', titulo: 'C:\\Web\\portada.html' } });
@@ -117,6 +123,8 @@ async function main() {
   ok(/Redactor toma B147 de la serie «planos»: revisión/.test(r.texto), 'el número anunciado llega a la sala', r.texto.slice(-600));
 
   console.log('6. Bandeja del moderador y autonomía');
+  // Pregunta sin plazo y sin respuesta de hace 4 días (p. ej., de una sala de la v0.1): ni avisa ni vuelve a «Para ti».
+  const nAntigua = inyectar(CARPETA, SALA, { t: new Date(Date.now() - 4 * 86_400_000).toISOString(), tipo: 'mensaje', de: 'Revisor', clase: 'pregunta', texto: '¿Seguimos con el plan de la v0.1?', para: [MOD] });
   r = await A.llamar('bro_enviar', { sala: SALA, yo: 'Redactor', para: MOD, clase: 'pregunta', texto: '¿Portada azul o verde?', por_defecto: 'azul', plazo_min: 60 });
   const nQ = Number(/Enviado #(\d+)/.exec(r.texto)?.[1]);
   ok(!r.error && !/Consejo/.test(r.texto), 'pregunta al moderador con opción por defecto y plazo', r.texto);
@@ -125,6 +133,7 @@ async function main() {
   await dormir(8000);
   const avisados = JSON.parse(fs.readFileSync(path.join(CARPETA, 'avisos.json'), 'utf8')).avisados;
   ok(avisados.includes(`${SALA}#${nQ}`), 'el aviso del sistema se registra (sin repetirse)');
+  ok(!avisados.includes(`${SALA}#${nAntigua}`) && !h.json.pendientes.some((x) => x.n === nAntigua), 'una pregunta sin plazo de hace más de 72 h ni avisa ni vuelve a la bandeja', JSON.stringify(h.json.pendientes));
   h = await pet('POST', `/api/salas/${SALA}/mensaje`, { cuerpo: { texto: 'Verde, gracias.', para: 'Redactor' }, cabeceras: POST });
   h = await pet('GET', '/api/bandeja');
   ok(!h.json.pendientes.some((x) => x.n === nQ), 'la respuesta del moderador la resuelve');
