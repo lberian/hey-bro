@@ -12,7 +12,7 @@ import { textos } from './textos.js';
 import { Visor } from './visor.js';
 import HTML from './visor.html';
 
-export const VERSION = '0.2.0';
+export const VERSION = '0.2.1';
 
 // Lee una opción de entorno. Claude Desktop sustituye ${user_config.x}; si el usuario dejó
 // el campo vacío puede llegar el texto literal "${...}": se trata como no configurado.

@@ -21,6 +21,7 @@ const MS_ENTRADA_ROTA = 10_000;
 export const EXTRA_POR_PARTICIPANTE = 20;
 export const RESERVA_MIN_POR_DEFECTO = 240;
 export const HUERFANA_H = 2; // una sala con un solo hermano esperando más de esto "espera ayuda"
+export const ANTIGUA_H = 72; // una pregunta al moderador sin plazo y sin respuesta tras esto ya no avisa ni sale en «Para ti»
 
 export const CLASES_MENSAJE = [
   'mensaje', 'pregunta', 'respuesta', 'peticion', 'encargo', 'entrega', 'aviso', 'relevo', 'bitacora',
@@ -462,7 +463,8 @@ export class Almacen {
     const lista = [];
     for (const e of st.paraModerador) {
       // pendiente | vencida (pasó el plazo y el hermano aún no lo ha anotado) |
-      // decidida (el hermano aplicó su opción por defecto tras el plazo) | resuelta
+      // decidida (el hermano aplicó su opción por defecto tras el plazo) | resuelta |
+      // antigua (sin plazo y sin respuesta durante más de ANTIGUA_H: p. ej., de salas de la v0.1; sigue en su sala)
       let estado = 'pendiente';
       const res = st.resueltos.get(e.n);
       const vence = e.plazo_min ? Date.parse(e.t) + e.plazo_min * 60_000 : null;
@@ -470,6 +472,7 @@ export class Almacen {
       else if (st.moderadorMsgs.some((m) => m.n > e.n && !m.conRef && m.para && m.para.some((x) => slug(x) === slug(e.de)))) estado = 'resuelta';
       else if (res) estado = vence && Date.parse(res.t) >= vence ? 'decidida' : 'resuelta';
       else if (vence && ahora > vence) estado = 'vencida';
+      else if (!vence && ahora - Date.parse(e.t) > ANTIGUA_H * 3_600_000) estado = 'antigua';
       lista.push({
         sala: st.meta.id, tema: st.meta.tema, n: e.n, t: e.t, de: e.de, clase: e.clase,
         titulo: e.titulo || '', texto: e.texto, por_defecto: e.por_defecto || '', plazo_min: e.plazo_min || null,

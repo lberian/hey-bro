@@ -777,7 +777,13 @@ export function crearHerramientas(ctx) {
         if (clase === 'encargo') {
           const dest = st2.participantes.get(slug(para[0]));
           l.push(T.tareaCreada(`T${e.n}`, para[0], dest?.ficha?.disponibilidad || T.noIndicada(), textoPresencia(almacen.presenciaDe(sala, para[0]))));
-          if (dest?.ficha?.id_sesion) l.push(T.avisoNativo(dest.ficha.id_sesion));
+        }
+        // Encargos, preguntas y peticiones a hermanos: si tienen id de sesión, sugiere el timbre nativo (SendMessage).
+        if (para && ['encargo', 'pregunta', 'peticion'].includes(clase)) {
+          for (const x of para) {
+            const d = st2.participantes.get(slug(x));
+            if (d?.ficha?.id_sesion && slug(d.nombre) !== slug(p.nombre)) l.push(T.avisoNativo(d.ficha.id_sesion));
+          }
         }
         if (entrada.tarea) l.push(`${entrada.tarea.id} → ${V(entrada.tarea.estado)}.`);
         if (entrada.resuelve) l.push(T.marcadasResueltas(entrada.resuelve.map((x) => `#${x}`).join(', ')));
