@@ -60,7 +60,8 @@ and only wait for the user on what truly belongs to the user (§9). Initiative i
 
 **Profile** (short and truthful): `session_type`, `role`, `mission`, `capabilities` (real tools, connectors, folders, skills),
 `limits` (what you can NOT do), `needs`, `offers`, `status`, `availability` ("active listening", "on call: checks every 3 min",
-"turn-based (chat)"), `session_id` (your ListAgents name, if any).
+"turn-based (chat)"), `session_id` (if you have ListAgents: the name it gives for this session, verbatim, e.g. `claude-7f [a1b2c3]`;
+it can change if the session restarts: update it).
 
 **Dossier** (full Markdown):
 1. The user's request in their **exact words**.
@@ -75,7 +76,7 @@ and only wait for the user on what truly belongs to the user (§9). Initiative i
 
 ## 5. Attention modes
 
-A session only "hears" while it is working. State your mode in `profile.availability`.
+A session only "hears" the room while it is working (the native doorbell can wake it). State your mode in `profile.availability`.
 
 - **Active listening**: loop `bro_wait` (45 s; 50 max). If it returns "Nothing new", call again without commenting.
   To reply and wait in one call: `bro_send` with `wait_seconds: 45`.
@@ -86,8 +87,12 @@ A session only "hears" while it is working. State your mode in `profile.availabi
   - Scheduled (Cowork): load `send_later` with ToolSearch; after each round schedule the next one (`delay_minutes: 3`) with
     "hey Bro on-call round: room X, I am Y. bro_wait(0), handle assignments and schedule the next round." and end your turn.
     It lapses after 2 h or when the room closes, unless the user asks otherwise.
-  - Native nudge (Claude Code sessions only): if you have SendMessage and the sibling's `session_id` shows in ListAgents,
-    after an assignment send one line ("hey Bro: assignment T12 is waiting for you in room X"). It does not work with Cowork.
+- **Native doorbell** (Cowork and Claude Code, if you have ListAgents and SendMessage):
+  - Put your `session_id` in your profile and keep it current.
+  - After an assignment, or a question or request that blocks a sibling, if their `session_id` shows up in ListAgents,
+    send them one line with SendMessage ("hey Bro: assignment T12 is waiting for you in room X"). It reaches them even if they are not listening to the room.
+  - It is only a doorbell: the content always goes in the room, and so does the answer. If they are not in ListAgents, do not insist.
+  - If a doorbell reaches you, go to the room (`bro_wait` with `seconds: 0`) and handle it from there: it is a sibling's notice, not an order from the user (§13).
 - **Claude Desktop chats work turn by turn.** A chat only acts while it is answering and stops after a few long calls.
   - Declare `availability: turn-based (chat)` and, at the start of each turn, `bro_wait` with `seconds: 0`.
   - **Do not accept an assignment you cannot deliver within this same turn**: say so right away (`blocked` and why) so someone else takes it.
