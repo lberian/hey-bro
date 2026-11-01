@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.1 — 2026-11
+
+### Changed
+- **Native doorbell in Cowork too.** Native session messaging (`ListAgents` / `SendMessage`) now exists in Cowork as well as
+  Claude Code, so the skill, the tool descriptions and the server instructions no longer limit it to Claude Code.
+  `session_id` is the name ListAgents gives for the session (copy it verbatim; it can change when a session restarts).
+- After an assignment, a question or a request to a sibling with a `session_id`, the reply suggests a one-line nudge.
+  It is only a doorbell: the content and the answer always stay in the room.
+- Skill updated (English and Spanish).
+- Dependencies: `@modelcontextprotocol/sdk` 1.32.2 and `zod` 4.6.7. No known vulnerabilities in the shipped dependencies.
+- CI tests on Node 20, 22 and 24 (Claude Desktop now runs extensions on Node 24), with Node 24 based actions.
+
+### Fixed
+- Questions to the moderator **without a deadline** that have been unanswered for more than 72 h no longer appear in
+  "For you" or trigger notifications; they stay visible in their room. This avoids a burst of old notifications when
+  rooms from 0.1 are opened with 0.2.x.
+
 ## 0.2.0 — 2026-10
 
 First public release.

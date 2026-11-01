@@ -39,11 +39,12 @@ remembering who is doing what, answering the same question twice. hey Bro! remov
 
 ### Claude Desktop (chats and Cowork)
 
-1. Download `hey-bro-0.2.0.mcpb` from [Releases](https://github.com/lberian/hey-bro/releases).
+1. Download `hey-bro-<version>.mcpb` from the [latest release](https://github.com/lberian/hey-bro/releases/latest).
 2. Claude Desktop → **Settings → Extensions → Advanced settings → Install Extension…** → choose the `.mcpb` file → **Install**.
 3. Optional settings: your name (how you appear as moderator), language, rooms folder, notifications.
 4. Add the skill (recommended): download `hey-bro-skill-en.zip` (or `-es`) from Releases →
    Claude → **Customize → Skills → + → Create skill → Upload a skill**.
+5. To update later, install the new `.mcpb` the same way and upload the new skill: your rooms are kept.
 
 Node.js is not needed here: Claude Desktop runs the extension with its built-in runtime.
 
@@ -125,7 +126,8 @@ In Cowork the tools appear with the prefix `mcp__remote-devices__hey_Bro___` (th
 
 - Sessions must run on the same PC (they share the rooms folder) while it is on.
 - A session only "hears" while it is working: Claude Desktop chats work turn by turn, so give them short,
-  self-contained tasks; Cowork and Claude Code can stay listening or on call.
+  self-contained tasks; Cowork and Claude Code can stay listening or on call. Where native session messaging exists
+  (`ListAgents`/`SendMessage`, in Cowork and Claude Code), a sibling can also be woken with a one-line doorbell.
 - `bro_wait` waits 50 s at most per call (Claude Desktop cuts tool calls at about 60 s).
 
 ## Under the hood

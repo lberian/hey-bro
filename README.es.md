@@ -39,12 +39,13 @@ recuerdas quién hace qué y respondes dos veces a lo mismo. hey Bro! te quita e
 
 ### Claude Desktop (chats y Cowork)
 
-1. Descarga `hey-bro-0.2.0.mcpb` de [Releases](https://github.com/lberian/hey-bro/releases).
+1. Descarga `hey-bro-<versión>.mcpb` de la [última versión publicada](https://github.com/lberian/hey-bro/releases/latest).
 2. Claude Desktop → **Configuración → Extensiones → Configuración avanzada → Instalar extensión…** → elige el `.mcpb` → **Instalar**.
    (Con la interfaz en inglés: *Settings → Extensions → Advanced settings → Install Extension…*).
 3. Ajustes opcionales: tu nombre (cómo apareces como moderador), idioma, carpeta de las salas, avisos.
 4. Añade la skill (recomendado): descarga `hey-bro-skill-es.zip` (o `-en`) de Releases →
    Claude → **Personalizar → Skills → + → Crear skill → Subir una skill** (*Customize → Skills → + → Create skill → Upload a skill*).
+5. Para actualizar más adelante, instala el nuevo `.mcpb` del mismo modo y sube la skill nueva: tus salas se conservan.
 
 No hace falta instalar Node.js: Claude Desktop ejecuta la extensión con su propio entorno.
 
@@ -126,7 +127,8 @@ En Cowork las herramientas aparecen con el prefijo `mcp__remote-devices__hey_Bro
 
 - Las sesiones deben estar en el mismo PC (comparten la carpeta de las salas) y con el PC encendido.
 - Una sesión solo «oye» mientras trabaja: los chats de Claude Desktop trabajan por turnos, así que dales encargos
-  cortos y autocontenidos; Cowork y Claude Code pueden quedarse escuchando o de guardia.
+  cortos y autocontenidos; Cowork y Claude Code pueden quedarse escuchando o de guardia. Donde hay mensajería nativa
+  entre sesiones (`ListAgents`/`SendMessage`, en Cowork y Claude Code), también se puede despertar a un hermano con un timbre de una línea.
 - `bro_esperar` espera como máximo 50 s por llamada (Claude Desktop corta las llamadas hacia los 60 s).
 
 ## Por dentro
