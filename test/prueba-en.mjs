@@ -95,6 +95,20 @@ async function main() {
   const md = await pet('GET', `/api/salas/${ROOM}/transcripcion.md`);
   ok(/^# hey Bro! — Website launch/.test(md.texto) && /Final board/.test(md.texto) && /- Room: `website-launch`/.test(md.texto) && /room: created/.test(md.texto) && /room: permanent/.test(md.texto) && !/creada|peticion/.test(md.texto), 'English transcript', md.texto.slice(0, 1500));
 
+  console.log('7. Projects and doorbells');
+  const PID = (role, id) => ({ ...PROFILE(role), session_id: id });
+  r = await A.llamar('bro_join', { project: 'Mobile App', me: 'Lead', profile: PID('lead', 'claude-aa [111111]'), dossier: DOSSIER('Lead') });
+  ok(!r.error && /Project "mobile-app": it had no room; I created the permanent room "mobile-app"/.test(r.texto), 'joining by project creates its room', r.texto.slice(0, 300));
+  r = await B.llamar('bro_join', { project: 'mobile app', me: 'Dev', profile: PID('dev', 'claude-bb [222222]'), dossier: DOSSIER('Dev') });
+  ok(!r.error && /its room is "mobile-app"/.test(r.texto), 'a second session joins without an invitation', r.texto.slice(0, 300));
+  await B.llamar('bro_wait', { room: 'mobile-app', me: 'Dev', seconds: 0 });
+  r = await A.llamar('bro_send', { room: 'mobile-app', me: 'Lead', to: 'Dev', kind: 'assignment', title: 'Build login', text: 'Build the login screen.' });
+  ok(/🔔 Pending doorbells/.test(r.texto) && /to: claude-bb\n/.test(r.texto) && /message: hey Bro: Dev, you have 1 new item \(latest: assignment T\d+ from Lead\) in room mobile-app/.test(r.texto), 'doorbell in English', r.texto.slice(-500));
+  r = await A.llamar('bro_update', { room: ROOM, me: 'Writer', room_project: 'Launch' });
+  ok(/now the room of project "launch"/.test(r.texto), 'room_project tags an existing room', r.texto);
+  r = await A.llamar('bro_rooms', {});
+  ok(/"mobile-app"[^\n]*project "mobile-app"/.test(r.texto), 'room list shows the project', r.texto);
+
   await Promise.all([A.cerrar(), B.cerrar()]);
   fin();
 }

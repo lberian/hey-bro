@@ -243,6 +243,74 @@ async function main() {
   r = await C.llamar('bro_historial', { sala: SALA, ultimos: 5 });
   ok(!r.error && /omitidas/.test(r.texto), 'historial con recorte');
 
+  console.log('11. Proyectos y timbres');
+  const FID = (papel, id) => ({ ...FICHA(papel), ...(id ? { id_sesion: id } : {}) });
+  const SP = 'web-corporativa';
+  r = await A.llamar('bro_unirse', { proyecto: 'Web Corporativa', yo: 'Jefa', ficha: FID('jefa', 'claude-aa [111111]'), dossier: DOSSIER('Jefa') });
+  ok(!r.error && /Proyecto «web-corporativa»: no tenía sala; he creado la sala permanente «web-corporativa»/.test(r.texto), 'unirse por proyecto crea su sala permanente', r.texto.slice(0, 400));
+  r = await B.llamar('bro_unirse', { proyecto: 'web corporativa', yo: 'Maquetador', ficha: FID('maquetador', 'claude-bb [222222]'), dossier: DOSSIER('Maquetador') });
+  ok(!r.error && /su sala es «web-corporativa»/.test(r.texto) && /Dossier de Jefa/.test(r.texto) && !/Tu ficha no tiene/.test(r.texto), 'otra sesión del proyecto entra sin invitación', r.texto.slice(0, 400));
+  r = await C.llamar('bro_unirse', { proyecto: 'Web Corporativa', yo: 'Sin Timbre', ficha: FICHA('sin timbre'), dossier: DOSSIER('Sin Timbre') });
+  ok(/Tu ficha no tiene «id_sesion»/.test(r.texto), 'sin id_sesion se le pide que lo ponga', r.texto.slice(-500));
+  r = await A.llamar('bro_unirse', { proyecto: 'Web Corporativa', yo: 'Jefa', ficha: { id_sesion: 'claude-aa [111111]', estado: 'De vuelta' } });
+  ok(!r.error && /Has retomado tu sitio/.test(r.texto), 'la misma sesión vuelve a entrar por proyecto y retoma', r.texto.slice(-300));
+  r = await C.llamar('bro_unirse', { proyecto: 'Web Corporativa', yo: 'Jefa', ficha: FID('otra', 'claude-cc [333333]'), dossier: DOSSIER('Otra') });
+  ok(r.error && /Ya hay un «Jefa»/.test(r.texto), 'otra sesión activa no puede quedarse con ese nombre', r.texto);
+  const [r1, r2] = await Promise.all([
+    A.llamar('bro_unirse', { proyecto: 'Carrera', yo: 'Uno', ficha: FID('uno', 'claude-11 [aaaaaa]'), dossier: DOSSIER('Uno') }),
+    B.llamar('bro_unirse', { proyecto: 'Carrera', yo: 'Dos', ficha: FID('dos', 'claude-22 [bbbbbb]'), dossier: DOSSIER('Dos') }),
+  ]);
+  ok(!r1.error && !r2.error && /«carrera»/.test(r1.texto) && /«carrera»/.test(r2.texto) && !/carrera-2/.test(r1.texto + r2.texto), 'dos sesiones que llegan a la vez acaban en la misma sala', `${r1.texto.slice(0, 200)}\n${r2.texto.slice(0, 200)}`);
+  r = await A.llamar('bro_unirse', { yo: 'Jefa' });
+  ok(r.error && /Indica «sala» o «proyecto»/.test(r.texto), 'sin sala ni proyecto, error claro', r.texto);
+  await B.llamar('bro_esperar', { sala: SP, yo: 'Maquetador', segundos: 0 });
+  r = await A.llamar('bro_enviar', { sala: SP, yo: 'Jefa', para: 'Maquetador', clase: 'encargo', titulo: 'Maquetar portada', texto: 'Maqueta la portada con el diseño acordado.' });
+  ok(/🔔 Timbres pendientes/.test(r.texto) && /to: claude-bb\n/.test(r.texto) && /message: hey Bro: Maquetador, tienes 1 novedad \(la última: encargo T\d+ de Jefa\) en la sala web-corporativa/.test(r.texto), 'encargo a un hermano parado → timbre con destino y mensaje', r.texto.slice(-700));
+  ok(!/aparece en ListAgents/.test(r.texto), 'sin duplicar el aviso nativo de la 0.2', r.texto.slice(-700));
+  r = await A.llamar('bro_tablero', { sala: SP, yo: 'Jefa' });
+  ok(!/🔔/.test(r.texto), 'el mismo timbre no se repite mientras no lea', r.texto.slice(-300));
+  r = await C.llamar('bro_esperar', { sala: SP, yo: 'Sin Timbre', segundos: 0 });
+  ok(!/🔔/.test(r.texto) && !/despierta a/.test(r.texto), 'quien no tiene mensajería nativa no toca timbres y no ve los apuntes de timbre', r.texto.slice(-400));
+  await B.llamar('bro_esperar', { sala: SP, yo: 'Maquetador', segundos: 0 });
+  await pet('POST', `/api/salas/${SP}/mensaje`, { cuerpo: { texto: 'Maquetador, prioridad a móvil.', para: 'Maquetador' }, cabeceras: POST });
+  r = await A.llamar('bro_esperar', { sala: SP, yo: 'Jefa', segundos: 0 });
+  ok(/to: claude-bb/.test(r.texto) && /mensaje de Ana/.test(r.texto), 'un mensaje del moderador a un hermano parado → timbre', r.texto.slice(-500));
+  await B.llamar('bro_esperar', { sala: SP, yo: 'Maquetador', segundos: 0 });
+  const esperaM = B.llamar('bro_esperar', { sala: SP, yo: 'Maquetador', segundos: 15 });
+  await dormir(900);
+  r = await A.llamar('bro_enviar', { sala: SP, yo: 'Jefa', para: 'Maquetador', clase: 'pregunta', texto: '¿Te sirve la paleta nueva?' });
+  ok(!/🔔/.test(r.texto), 'si está escuchando, no hace falta timbre', r.texto.slice(-300));
+  r = await esperaM;
+  ok(/paleta nueva/.test(r.texto), 'y le llega al momento', r.texto.slice(-300));
+  r = await B.llamar('bro_enviar', { sala: SP, yo: 'Maquetador', para: 'Jefa', clase: 'respuesta', texto: 'Sí, me sirve.' });
+  ok(/to: claude-aa\n/.test(r.texto), 'la respuesta despierta a quien preguntó', r.texto.slice(-400));
+  await A.llamar('bro_esperar', { sala: SP, yo: 'Jefa', segundos: 0 });
+  await B.llamar('bro_esperar', { sala: SP, yo: 'Maquetador', segundos: 0 });
+  r = await A.llamar('bro_enviar', { sala: SP, yo: 'Jefa', texto: 'Comentario general, sin prisa.' });
+  ok(!/🔔/.test(r.texto), 'un mensaje general no despierta a nadie', r.texto.slice(-300));
+  r = await A.llamar('bro_enviar', { sala: SP, yo: 'Jefa', clase: 'aviso', texto: 'Ojo: mañana se corta la luz a las 9.' });
+  ok(/to: claude-bb/.test(r.texto) && /la última: aviso de Jefa/.test(r.texto), 'un aviso a todos sí despierta', r.texto.slice(-400));
+  inyectar(CARPETA, SP, { t: new Date(Date.now() - 11 * 60_000).toISOString(), tipo: 'timbre', de: 'Jefa', para: 'Maquetador', hasta: 999999, intento: 1 });
+  r = await A.llamar('bro_esperar', { sala: SP, yo: 'Jefa', segundos: 0 });
+  ok(/Maquetador \(2\.º intento\)\n  to: claude-bb/.test(r.texto), 'si no lee, se reintenta pasado el plazo', r.texto.slice(-500));
+  inyectar(CARPETA, SP, { t: new Date(Date.now() - 11 * 60_000).toISOString(), tipo: 'timbre', de: 'Jefa', para: 'Maquetador', hasta: 999999, intento: 3 });
+  r = await A.llamar('bro_esperar', { sala: SP, yo: 'Jefa', segundos: 0 });
+  ok(/Maquetador no responde a los timbres/.test(r.texto) && !/to: claude-bb/.test(r.texto), 'tras varios intentos, avisa de que no responde', r.texto.slice(-400));
+  r = await A.llamar('bro_esperar', { sala: SP, yo: 'Jefa', segundos: 0 });
+  ok(!/no responde/.test(r.texto), 'y no lo repite en cada llamada', r.texto.slice(-300));
+  r = await B.llamar('bro_esperar', { sala: SP, yo: 'Maquetador', segundos: 0 });
+  ok(/se corta la luz/.test(r.texto) && !/despierta a/.test(r.texto), 'al despertar ve lo suyo, sin los apuntes de timbre', r.texto.slice(-400));
+  r = await A.llamar('bro_actualizar', { sala: SALA, yo: 'Redactor', sala_proyecto: 'Lanzamiento' });
+  ok(/Esta sala es ahora la del proyecto «lanzamiento»/.test(r.texto), 'una sala existente se marca como la de un proyecto', r.texto);
+  r = await C.llamar('bro_unirse', { proyecto: 'lanzamiento', yo: 'Disenador', ficha: { estado: 'Vuelvo por proyecto' }, retomar: true });
+  ok(!r.error && /su sala es «lanzamiento-de-la-web»/.test(r.texto) && /Has retomado tu sitio/.test(r.texto), 'entrar por proyecto lleva a la sala marcada', r.texto.slice(0, 300));
+  r = await C.llamar('bro_salas', {});
+  ok(/«web-corporativa»[^\n]*proyecto «web-corporativa»/.test(r.texto) && /«lanzamiento-de-la-web»[^\n]*proyecto «lanzamiento»/.test(r.texto), 'bro_salas muestra el proyecto', r.texto);
+  h = await pet('GET', `/api/salas/${SP}`);
+  ok(h.json?.proyecto === 'web-corporativa' && h.json.entradas.some((e) => e.tipo === 'timbre'), 'el visor ve el proyecto y los timbres');
+  h = await pet('GET', `/api/salas/${SP}/transcripcion.md`);
+  ok(/🔔 Jefa despierta a Maquetador/.test(h.texto) && /Maquetador despierta a Jefa/.test(h.texto), 'la transcripción registra los timbres');
+
   await Promise.all([A.cerrar(), B.cerrar(), C.cerrar()]);
   fin();
 }
