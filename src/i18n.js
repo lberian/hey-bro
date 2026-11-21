@@ -38,7 +38,7 @@ export const PARAM_ES = {
   seconds: 'segundos', new: 'nuevo', change: 'cambiar', show_all: 'todo', series: 'serie', reason: 'motivo',
   count: 'cantidad', start_at: 'empezar_en', prefix: 'prefijo', peek: 'solo_ver', who: 'de', log_entries: 'bitacora',
   since: 'desde', last: 'ultimos', include_log: 'incluir_bitacora', include_closed: 'incluir_cerradas',
-  summary: 'resumen', open: 'abrir',
+  summary: 'resumen', open: 'abrir', project: 'proyecto', room_project: 'sala_proyecto',
   // ficha
   session_type: 'tipo_sesion', role: 'papel', mission: 'mision', capabilities: 'capacidades', limits: 'limites',
   needs: 'necesito', offers: 'ofrezco', status: 'estado', availability: 'disponibilidad', session_id: 'id_sesion',
@@ -93,4 +93,5 @@ export const VALOR_EN = {
   propuesta: 'proposed', acordada: 'agreed', exclusiva: 'exclusive', compartida: 'shared',
   abierta: 'open', pausada: 'paused', cerrada: 'closed', archivada: 'archived',
   creada: 'created', reanudada: 'resumed', reabierta: 'reopened', ampliada: 'limit raised', permanente: 'permanent', temporal: 'temporary',
+  proyecto: 'project',
 };

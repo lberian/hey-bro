@@ -345,7 +345,8 @@ const TX = {
     crea: ' crea ', cambia: ' cambia ', laTarea: 'la tarea', laReserva: 'la reserva', laDecision: 'la decisión', paraQuien: (n) => ` para ${n}`,
     resumenCierreDe: (n) => `Resumen de cierre de ${n}`, peticionOriginal: 'Petición original', porDefecto: (h) => (h ? `Si no hay respuesta antes de las ${h}` : 'Si no hay respuesta'),
     toma: (et, s) => ` toma ${et} de la serie «${s}»`, resuelve: (r) => ` da por resuelta la #${r}`, respondeA: (r) => `responde a ${r}`,
-    sala: { creada: 'sala creada', pausada: 'sala en pausa', reanudada: 'sala reanudada', cerrada: 'sala cerrada', reabierta: 'sala reabierta', ampliada: (c) => `límite ampliado +${c}`, permanente: 'ahora es permanente', temporal: 'vuelve a ser temporal' },
+    sala: { creada: 'sala creada', pausada: 'sala en pausa', reanudada: 'sala reanudada', cerrada: 'sala cerrada', reabierta: 'sala reabierta', ampliada: (c) => `límite ampliado +${c}`, permanente: 'ahora es permanente', temporal: 'vuelve a ser temporal', proyecto: (p) => (p ? `ahora es la sala del proyecto «${p}»` : 'ya no es sala de proyecto') },
+    timbre: (de, para, i) => `🔔 ${de} despierta a ${para}${i > 1 ? ` (${i}.º intento)` : ''}`, proyecto: (p) => `proyecto ${p}`,
     escuchando: 'escuchando', activo: 'activo', visto: (h) => `visto ${h}`, sinActividad: 'sin actividad', ultimaActividad: (f) => `Última actividad: ${f}`,
     fichaCompleta: 'Ficha completa', estado: 'Estado', sinHermanos: 'Todavía no se ha unido nadie. Copia la invitación en otra sesión de Claude.',
     campos: [['mision', 'Misión'], ['capacidades', 'Capacidades'], ['limites', 'Límites'], ['necesito', 'Necesita'], ['ofrezco', 'Ofrece'], ['disponibilidad', 'Disponibilidad'], ['id_sesion', 'Id de sesión']],
@@ -381,7 +382,8 @@ const TX = {
     crea: ' creates ', cambia: ' changes ', laTarea: 'task', laReserva: 'reservation', laDecision: 'decision', paraQuien: (n) => ` for ${n}`,
     resumenCierreDe: (n) => `Closing summary by ${n}`, peticionOriginal: 'Original request', porDefecto: (h) => (h ? `If there is no answer by ${h}` : 'If there is no answer'),
     toma: (et, s) => ` takes ${et} from series "${s}"`, resuelve: (r) => ` marks #${r} as resolved`, respondeA: (r) => `answers ${r}`,
-    sala: { creada: 'room created', pausada: 'room paused', reanudada: 'room resumed', cerrada: 'room closed', reabierta: 'room reopened', ampliada: (c) => `limit raised +${c}`, permanente: 'now permanent', temporal: 'temporary again' },
+    sala: { creada: 'room created', pausada: 'room paused', reanudada: 'room resumed', cerrada: 'room closed', reabierta: 'room reopened', ampliada: (c) => `limit raised +${c}`, permanente: 'now permanent', temporal: 'temporary again', proyecto: (p) => (p ? `now the room of project "${p}"` : 'no longer a project room') },
+    timbre: (de, para, i) => `🔔 ${de} wakes up ${para}${i > 1 ? ` (attempt ${i})` : ''}`, proyecto: (p) => `project ${p}`,
     escuchando: 'listening', activo: 'active', visto: (h) => `seen ${h}`, sinActividad: 'no activity', ultimaActividad: (f) => `Last activity: ${f}`,
     fichaCompleta: 'Full profile', estado: 'Status', sinHermanos: 'Nobody has joined yet. Copy the invitation into another Claude session.',
     campos: [['mision', 'Mission'], ['capacidades', 'Capabilities'], ['limites', 'Limits'], ['necesito', 'Needs'], ['ofrezco', 'Offers'], ['disponibilidad', 'Availability'], ['id_sesion', 'Session id']],
@@ -567,6 +569,7 @@ function pintarSalas() {
     ul.append(el('li', {}, el('button', { class: 'sala-item', 'aria-current': s.id === E.sala ? 'true' : 'false', onclick: () => seleccionar(s.id), title: s.id },
       el('span', { class: 't' }, s.tema),
       el('span', { class: 'm' }, chipEstado(s.estado), s.permanente ? el('span', { class: 'chip info' }, TX.permanente) : null,
+        s.proyecto ? el('span', { class: 'chip' }, TX.proyecto(s.proyecto)) : null,
         s.pendientesModerador ? el('span', { class: 'chip acento' }, `${TX.paraTi} ${s.pendientesModerador}`) : null,
         `${TX.hermanoN(s.participantes.length)} · ${hace(s.ultimaActividad)}`))));
   }
@@ -621,6 +624,7 @@ function pintarCabecera() {
   $('#salaChips').replaceChildren(...[
     chipEstado(d.estado),
     d.permanente ? el('span', { class: 'chip info' }, TX.permanente) : null,
+    d.proyecto ? el('span', { class: 'chip' }, TX.proyecto(d.proyecto)) : null,
     el('span', { class: `chip ${pct >= 100 ? 'danger' : pct >= 80 ? 'warn' : ''}` }, TX.mensajes(d.mensajes, d.limite),
       d.limite ? el('span', { class: 'medidor', 'aria-hidden': 'true' }, el('i', { style: `width:${pct}%` })) : null),
     esperan ? el('span', { class: 'chip acento' }, `${TX.paraTi} ${esperan}`) : null,
@@ -691,6 +695,8 @@ function nodoEntrada(e) {
       return el('div', { class: 'e-evento' }, el('span', { class: 'hora' }, hora(e.t)), el('span', {}, el('b', {}, e.de), TX.toma((e.etiquetas || []).join(', '), e.serie), e.motivo ? `: ${e.motivo}` : ''));
     case 'resuelto':
       return el('div', { class: 'e-evento' }, el('span', { class: 'hora' }, hora(e.t)), el('span', {}, el('b', {}, e.de), TX.resuelve(e.ref)));
+    case 'timbre':
+      return el('div', { class: 'e-evento' }, el('span', { class: 'hora' }, hora(e.t)), el('span', {}, TX.timbre(e.de, e.para, Number(e.intento) || 1)));
     case 'tablero': {
       let txt;
       if (e.accion === 'nuevo') {
@@ -704,7 +710,7 @@ function nodoEntrada(e) {
     }
     case 'sala': {
       const s = TX.sala;
-      const t = e.accion === 'ampliada' ? s.ampliada(e.cantidad) : e.accion === 'permanente' ? (e.valor ? s.permanente : s.temporal) : (s[e.accion] || e.accion);
+      const t = e.accion === 'ampliada' ? s.ampliada(e.cantidad) : e.accion === 'permanente' ? (e.valor ? s.permanente : s.temporal) : e.accion === 'proyecto' ? s.proyecto(e.valor) : (s[e.accion] || e.accion);
       const linea = el('div', { class: 'e-sala' }, `${t}${e.de ? ` · ${e.de}` : ''} · ${hora(e.t)}`);
       if (e.accion === 'cerrada' && e.resumen) {
         const f = document.createDocumentFragment();

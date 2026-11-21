@@ -287,6 +287,7 @@ export class Visor {
       meta: st.meta,
       estado: a.estadoVisible(st),
       permanente: st.permanente,
+      proyecto: st.proyecto,
       limite: st.permanente ? null : st.limite,
       mensajes: st.mensajes,
       ultimoN: st.ultimoN,
@@ -353,9 +354,12 @@ export class Visor {
         l.push(`*#${e.n} · ${cuando} — ${T.numeroEv(e.de, (e.etiquetas || []).join(', '), e.serie, e.motivo)}*`, '');
       } else if (e.tipo === 'resuelto') {
         l.push(`*#${e.n} · ${cuando} — ${T.resueltoEv(e.de, e.ref)}*`, '');
+      } else if (e.tipo === 'timbre') {
+        l.push(`*#${e.n} · ${cuando} — ${T.timbreEv(e.de, e.para, Number(e.intento) || 1)}*`, '');
       } else if (e.tipo === 'sala') {
         const accion = e.accion === 'permanente' ? (e.valor ? 'permanente' : 'temporal') : e.accion;
-        l.push(`*${T.trSala(e.n, cuando, `${V(accion)}${e.accion === 'ampliada' ? ` +${e.cantidad}` : ''}`, e.de)}*`, '');
+        const extraSala = e.accion === 'ampliada' ? ` +${e.cantidad}` : e.accion === 'proyecto' ? `: ${e.valor || '—'}` : '';
+        l.push(`*${T.trSala(e.n, cuando, `${V(accion)}${extraSala}`, e.de)}*`, '');
         if (e.resumen) l.push(`**${T.trResumenCierre()}:**`, '', e.resumen, '');
       }
     }

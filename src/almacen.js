@@ -22,6 +22,8 @@ export const EXTRA_POR_PARTICIPANTE = 20;
 export const RESERVA_MIN_POR_DEFECTO = 240;
 export const HUERFANA_H = 2; // una sala con un solo hermano esperando más de esto "espera ayuda"
 export const ANTIGUA_H = 72; // una pregunta al moderador sin plazo y sin respuesta tras esto ya no avisa ni sale en «Para ti»
+export const REINTENTO_TIMBRE_MS = 10 * 60_000; // si el hermano no lee tras un timbre, se vuelve a llamar pasado esto
+export const MAX_INTENTOS_TIMBRE = 3; // después, se avisa de que no responde
 
 export const CLASES_MENSAJE = [
   'mensaje', 'pregunta', 'respuesta', 'peticion', 'encargo', 'entrega', 'aviso', 'relevo', 'bitacora',
@@ -119,7 +121,8 @@ export class Almacen {
     }
   }
 
-  crearSala({ tema, objetivo = '', nombre = '', limite, creador = null, papelInvitado = '', permanente = false }) {
+  // Con «exacto», si el id ya existe devuelve null en vez de buscar otro libre (para no duplicar la sala de un proyecto).
+  crearSala({ tema, objetivo = '', nombre = '', limite, creador = null, papelInvitado = '', permanente = false, proyecto = '', exacto = false }) {
     const base = slug(nombre || tema, 40) || 'sala';
     let id = base;
     for (let i = 2; ; i++) {
@@ -128,6 +131,7 @@ export class Almacen {
         break;
       } catch (e) {
         if (e.code !== 'EEXIST') throw e;
+        if (exacto) return null;
         id = `${base}-${i}`;
         if (i > 999) throw new ErrorBro(this.T.sinIdLibre());
       }
@@ -144,6 +148,7 @@ export class Almacen {
       invitacion: this.T.invitacion({ id, tema, objetivo, papelInvitado }),
       version: 2,
     };
+    if (slug(proyecto)) meta.proyecto = slug(proyecto);
     escribirAtomico(path.join(dir, 'sala.json'), JSON.stringify(meta, null, 2));
     this.anotar(id, { tipo: 'sala', accion: 'creada', de: creador });
     return meta;
@@ -172,6 +177,7 @@ export class Almacen {
           objetivo: st.meta.objetivo,
           estado: visible,
           permanente: st.permanente,
+          proyecto: st.proyecto,
           mensajes: st.mensajes,
           limite: st.permanente ? null : st.limite,
           participantes: [...st.participantes.values()].map((p) => p.nombre),
@@ -280,6 +286,7 @@ export class Almacen {
         meta: c.meta,
         estado: 'abierta',
         permanente: !!c.meta.permanente,
+        proyecto: c.meta.proyecto || null,
         limite: c.meta.limite_inicial,
         mensajes: 0,
         participantes: new Map(),
@@ -291,6 +298,7 @@ export class Almacen {
         paraModerador: [], // entradas pregunta/petición dirigidas al moderador
         moderadorMsgs: [], // { n, para }
         resueltos: new Map(), // n → { por: 'moderador' | 'hermano', t }
+        timbres: new Map(), // hermano → último timbre válido { n, t, de, hasta, intentos }
       };
       c.plegadoHasta = 0;
     }
@@ -313,6 +321,7 @@ export class Almacen {
         else if (e.accion === 'reabierta') st.estado = 'abierta';
         else if (e.accion === 'ampliada') st.limite += Number(e.cantidad) || 0;
         else if (e.accion === 'permanente') st.permanente = !!e.valor;
+        else if (e.accion === 'proyecto') st.proyecto = e.valor || null;
         st.ultimaActividad = e.t;
         break;
       case 'union': {
@@ -370,6 +379,15 @@ export class Almacen {
       case 'numero':
         st.ultimaActividad = e.t;
         break;
+      case 'timbre': {
+        // Un hermano avisa a otro por mensajería nativa. Si dos lo piden a la vez para las mismas
+        // novedades, vale el primero; un reintento solo cuenta pasado REINTENTO_TIMBRE_MS.
+        const k = slug(e.para);
+        const prev = st.timbres.get(k);
+        const duplicado = prev && Number(e.hasta) <= prev.hasta && Date.parse(e.t) - Date.parse(prev.t) < REINTENTO_TIMBRE_MS;
+        if (!duplicado) st.timbres.set(k, { n: e.n, t: e.t, de: e.de, hasta: Number(e.hasta) || 0, intentos: Number(e.intento) || 1 });
+        break;
+      }
       case 'tablero':
         this.aplicarTablero(st, e);
         st.ultimaActividad = e.t;
@@ -500,6 +518,28 @@ export class Almacen {
       res.push({ sala: st.meta.id, tema: st.meta.tema, de: solo.nombre, n: ultima.n, t: ultima.t, texto: primeraLinea(ultima.texto, 160), invitacion: st.meta.invitacion, archivada: this.estadoVisible(st, ahora) === 'archivada' });
     }
     return res.sort((a, b) => b.t.localeCompare(a.t));
+  }
+
+  // Sala de un proyecto: la abierta marcada con ese proyecto (la de actividad más reciente) o, si no hay,
+  // una sala abierta cuyo id coincide con el nombre del proyecto. null si no existe.
+  salaDeProyecto(proyecto) {
+    const p = slug(proyecto);
+    if (!p) return null;
+    let dirs = [];
+    try { dirs = fs.readdirSync(this.dirSalas, { withFileTypes: true }); } catch { return null; }
+    let mejor = null;
+    for (const d of dirs) {
+      if (!d.isDirectory() || !this.existeSala(d.name)) continue;
+      let st;
+      try { st = this.estadoSala(d.name); } catch { continue; }
+      if (st.estado === 'cerrada' || st.proyecto !== p) continue;
+      if (!mejor || String(st.ultimaActividad) > String(mejor.ultimaActividad)) mejor = st;
+    }
+    if (mejor) return mejor.meta.id;
+    if (this.existeSala(p)) {
+      try { if (this.estadoSala(p).estado !== 'cerrada') return p; } catch { /* sala dañada */ }
+    }
+    return null;
   }
 
   bandeja(ahora = Date.now()) {

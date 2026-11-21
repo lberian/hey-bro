@@ -3,7 +3,7 @@
 
 import {
   ALIAS_MODERADOR, ALIAS_TODOS, CAMPOS_FICHA, CAMPOS_FICHA_OBLIGATORIOS, CLASES_MENSAJE, ESTADOS_CERRADOS, ESTADOS_ITEM, ErrorBro, PREFIJO_ITEM,
-  RESERVA_MIN_POR_DEFECTO, primeraLinea, slug,
+  MAX_INTENTOS_TIMBRE, REINTENTO_TIMBRE_MS, RESERVA_MIN_POR_DEFECTO, primeraLinea, slug,
 } from './almacen.js';
 import { diferenciaLineas } from './diferencias.js';
 import { NOMBRE_EN, NOMBRE_ES, VALOR_EN, VALOR_ES, normalizarArgs, normalizarEnum } from './i18n.js';
@@ -156,6 +156,7 @@ export function crearHerramientas(ctx) {
           reabierta: T.salaReabiertaEv(quien),
           ampliada: T.salaAmpliadaEv(e.cantidad, quien),
           permanente: e.valor ? T.salaPermanenteEv(quien) : T.salaTemporalEv(quien),
+          proyecto: T.salaProyectoEv(e.valor || '', quien),
         }[e.accion] || `${e.accion}`;
         return `[#${e.n} · ${cuando}] ${t}`;
       }
@@ -202,6 +203,8 @@ export function crearHerramientas(ctx) {
       }
       case 'resuelto':
         return `[#${e.n} · ${cuando}] ${T.resueltoEv(e.de, e.ref)}`;
+      case 'timbre':
+        return `[#${e.n} · ${cuando}] ${T.timbreEv(e.de, e.para, Number(e.intento) || 1)}`;
       case 'numero':
         return `[#${e.n} · ${cuando}] ${T.numeroEv(e.de, e.etiquetas.join(', '), e.serie, e.motivo)}`;
       case 'tablero': {
@@ -291,7 +294,7 @@ export function crearHerramientas(ctx) {
       por_defecto: 'default', segundos: 'seconds', esperar_segundos: 'wait_seconds', limite_mensajes: 'message_limit',
       anadir_al_dossier: 'append_to_dossier', resumen_cambios: 'change_summary', papel_invitado: 'guest_role',
       cantidad: 'count', empezar_en: 'start_at', prefijo: 'prefix', plazo_min: 'deadline_min', caduca_min: 'expires_min',
-      desde: 'since', ultimos: 'last', bitacora: 'log_entries',
+      desde: 'since', ultimos: 'last', bitacora: 'log_entries', proyecto: 'project', sala_proyecto: 'room_project',
     }[campo] || campo) : campo;
   }
 
@@ -383,7 +386,7 @@ export function crearHerramientas(ctx) {
     }
     if (signal?.aborted) throw new ErrorBro(T.esperaCancelada());
 
-    const lote = formatearLote(todas, st, { yo, filtro: (e) => !(e.de && slug(e.de) === ys) });
+    const lote = formatearLote(todas, st, { yo, filtro: (e) => !(e.de && slug(e.de) === ys) && e.tipo !== 'timbre' });
     pres = almacen.leerPresencia(sala, yo) || pres;
     const hastaFinal = lote.restantes > 0 ? (lote.hasta ?? pres.cursor ?? 0) : (todas.length ? todas[todas.length - 1].n : (pres.cursor ?? 0));
     pres.cursor = Math.max(pres.cursor || 0, hastaFinal);
@@ -422,6 +425,81 @@ export function crearHerramientas(ctx) {
     return [T.esperanAyudaTitulo(), ...h.map((x) => T.esperanAyudaLinea(x.sala, x.de, hace(x.t), x.texto))].join('\n');
   }
 
+  // ───────────────────────────── timbres (mensajería nativa) ─────────────────────────────
+
+  // ¿Merece esta entrada despertar a un hermano parado? Lo que va dirigido a él, las preguntas,
+  // peticiones y avisos a todos, los mensajes del moderador y las tareas que le asignan.
+  // Los mensajes generales, la bitácora y las fichas esperan a que se despierte.
+  function timbrable(e, ps) {
+    if (e.de && slug(e.de) === ps) return false;
+    const aEl = (para) => Array.isArray(para) && para.some((x) => slug(x) === ps);
+    const aTodos = (para) => !Array.isArray(para) || !para.length;
+    switch (e.tipo) {
+      case 'mensaje': return e.clase !== 'bitacora' && (aEl(e.para) || (aTodos(e.para) && ['pregunta', 'peticion', 'aviso'].includes(e.clase)));
+      case 'moderador': return aTodos(e.para) || aEl(e.para);
+      case 'tablero':
+        if (e.accion === 'nuevo') return e.item?.tipo === 'tarea' && !!e.item?.responsable && slug(e.item.responsable) === ps;
+        return !!e.cambios?.responsable && slug(e.cambios.responsable) === ps;
+      default: return false;
+    }
+  }
+
+  function resumenPendientes(lista) {
+    const e = lista[lista.length - 1];
+    let que;
+    if (e.tipo === 'moderador') que = T.resModerador(e.de || almacen.moderador);
+    else if (e.tipo === 'tablero') que = T.resTarea(e.accion === 'nuevo' ? `T${e.n}` : e.id, e.de);
+    else if (e.clase === 'encargo') que = T.resEncargo(`T${e.n}`, e.de);
+    else que = T.resMensaje(V(e.clase), e.de);
+    return T.resPendientes(lista.length, que);
+  }
+
+  // Nombre al que se manda el mensaje: el de ListAgents sin el [ref] (SendMessage resuelve el nombre solo).
+  const destinoNativo = (id) => String(id).replace(/\s*\[[^\]]*\]\s*$/, '').trim() || String(id).trim();
+
+  const yaAvisadoNoResponde = new Set();
+
+  // Hermanos con novedades para ellos que no están escuchando: quien llama (si tiene mensajería
+  // nativa) los despierta con una línea por SendMessage. Se anota en la sala para no repetirlo.
+  function timbres(sala, yo) {
+    let st;
+    try { st = almacen.estadoSala(sala); } catch { return []; }
+    const ys = slug(yo);
+    const yoP = st.participantes.get(ys);
+    if (!yoP || !yoP.ficha?.id_sesion || st.estado === 'cerrada') return [];
+    const lineas = [];
+    const noResponden = [];
+    for (const p of [...st.participantes.values()]) {
+      const ps = slug(p.nombre);
+      const id = p.ficha?.id_sesion;
+      if (ps === ys || !id) continue;
+      if (almacen.presenciaDe(sala, p.nombre).estado === 'escuchando') continue;
+      const cursor = almacen.leerPresencia(sala, p.nombre)?.cursor || 0;
+      const pendientes = almacen.entradasDesde(sala, cursor).filter((e) => timbrable(e, ps));
+      if (!pendientes.length) continue;
+      const hasta = pendientes[pendientes.length - 1].n;
+      const previo = st.timbres.get(ps);
+      let intento = 1;
+      if (previo && cursor < previo.hasta) {
+        if (Date.now() - Date.parse(previo.t) < REINTENTO_TIMBRE_MS) continue; // le acaban de llamar
+        if (previo.intentos >= MAX_INTENTOS_TIMBRE) {
+          const clave = `${sala}|${ps}|${previo.n}`;
+          if (!yaAvisadoNoResponde.has(clave)) { yaAvisadoNoResponde.add(clave); noResponden.push(p.nombre); }
+          continue;
+        }
+        intento = previo.intentos + 1;
+      }
+      const e = almacen.anotar(sala, { tipo: 'timbre', de: yoP.nombre, para: p.nombre, hasta, intento });
+      st = almacen.estadoSala(sala);
+      if (st.timbres.get(ps)?.n !== e.n) continue; // otro hermano se ha adelantado
+      lineas.push(T.timbreLinea(p.nombre, destinoNativo(id), sala, resumenPendientes(pendientes), H('bro_esperar'), intento));
+    }
+    const l = [];
+    if (lineas.length) l.push(T.timbresTitulo(), ...lineas);
+    for (const n of noResponden) l.push(T.noRespondeTimbre(n));
+    return l;
+  }
+
   // ───────────────────────────── definiciones ─────────────────────────────
 
   const L = (es, eng) => (en ? eng : es);
@@ -438,6 +516,7 @@ export function crearHerramientas(ctx) {
     caduca_min: 'expires_min', modo: 'mode', esperar_turno: 'queue', estado: 'status', id: 'id',
     tipo_sesion: 'session_type', papel: 'role', mision: 'mission', capacidades: 'capabilities', limites: 'limits',
     necesito: 'needs', ofrezco: 'offers', disponibilidad: 'availability', id_sesion: 'session_id',
+    proyecto: 'project', sala_proyecto: 'room_project',
   }[n] || n) : n);
   const props = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [P(k), v]));
   const req = (...ks) => ks.map(P);
@@ -465,7 +544,7 @@ export function crearHerramientas(ctx) {
         properties: props({
           tema: S(T.dTema()), objetivo: S(T.dObjetivo()), nombre: S(T.dNombreSala()), limite_mensajes: I(T.dLimite()),
           permanente: B(T.dPermanente()), papel_invitado: S(T.dPapelInvitado()), yo: S(T.dYoCrear()),
-          ficha: ESQUEMA_FICHA, dossier: S(T.dDossier()),
+          ficha: ESQUEMA_FICHA, dossier: S(T.dDossier()), proyecto: S(T.dProyectoCrear()),
         }),
         required: req('tema'),
       },
@@ -475,8 +554,10 @@ export function crearHerramientas(ctx) {
       description: T.dUnirse(),
       inputSchema: {
         type: 'object',
-        properties: props({ sala: S(T.dSala()), yo: S(T.dYo()), ficha: ESQUEMA_FICHA, dossier: S(T.dDossier()), retomar: B(T.dRetomar()) }),
-        required: req('sala', 'yo'),
+        properties: props({
+          sala: S(T.dSalaUnirse()), proyecto: S(T.dProyecto()), yo: S(T.dYo()), ficha: ESQUEMA_FICHA, dossier: S(T.dDossier()), retomar: B(T.dRetomar()),
+        }),
+        required: req('yo'),
       },
     },
     {
@@ -487,7 +568,7 @@ export function crearHerramientas(ctx) {
         properties: props({
           sala: S(T.dSala()), yo: S(T.dYo()), ficha: { ...ESQUEMA_FICHA, description: T.dFichaParcial() },
           dossier: S(T.dDossierNuevo()), anadir_al_dossier: S(T.dAnadirDossier()), resumen_cambios: S(T.dResumenCambios()),
-          sala_permanente: B(T.dSalaPermanente()),
+          sala_permanente: B(T.dSalaPermanente()), sala_proyecto: S(T.dSalaProyecto()),
         }),
         required: req('sala', 'yo'),
       },
@@ -636,7 +717,7 @@ export function crearHerramientas(ctx) {
     const lote = formatearLote(previas, st, {
       yo: nombre,
       maxChars: 40_000,
-      filtro: (e) => !(e.de && slug(e.de) === slug(nombre)) && !['union', 'ficha'].includes(e.tipo) && !(e.tipo === 'sala' && e.accion === 'creada'),
+      filtro: (e) => !(e.de && slug(e.de) === slug(nombre)) && !['union', 'ficha', 'timbre'].includes(e.tipo) && !(e.tipo === 'sala' && e.accion === 'creada'),
     });
     if (lote.entregadas) {
       l.push('', `══ ${T.mensajesAnteriores()} ══`, lote.texto);
@@ -650,6 +731,7 @@ export function crearHerramientas(ctx) {
 
     const huerf = textoHuerfanas(sala);
     if (huerf) l.push('', huerf);
+    if (!st.participantes.get(slug(nombre))?.ficha?.id_sesion) l.push('', T.pideIdSesion(P('id_sesion'), H('bro_actualizar')));
     l.push('', accion === 'nuevo'
       ? (otros.length ? T.siguienteLecturaVuelta() : T.siguienteApertura(H('bro_esperar')))
       : T.hasRetomado(H('bro_esperar')));
@@ -670,7 +752,8 @@ export function crearHerramientas(ctx) {
           validarFicha(args.ficha);
           texto(args, 'dossier', { obligatorio: true, max: MAX_DOSSIER, min: 40 });
         }
-        const meta = almacen.crearSala({ tema, objetivo, nombre: id, limite, creador: yo, papelInvitado, permanente: !!args.permanente });
+        const proyecto = texto(args, 'proyecto', { max: 60 });
+        const meta = almacen.crearSala({ tema, objetivo, nombre: id, limite, creador: yo, papelInvitado, permanente: !!args.permanente, proyecto });
         const url = await ctx.visor?.asegurar().catch(() => null);
         const l = [T.salaCreada(meta.id), T.salaCreadaDetalle(tema, objetivo, meta.permanente ? null : limite)];
         if (yo) l.push('', unirseInterno({ sala: meta.id, yo, ficha: args.ficha, dossier: args.dossier, retomar: false }));
@@ -680,9 +763,40 @@ export function crearHerramientas(ctx) {
       }
 
       case 'bro_unirse': {
-        const sala = texto(args, 'sala', { obligatorio: true, max: 60 });
+        const yo = validarNombre(args.yo);
+        let sala = texto(args, 'sala', { max: 60 });
+        const proyecto = texto(args, 'proyecto', { max: 60 });
+        if (!sala && !proyecto) throw new ErrorBro(T.faltaSalaOProyecto(P('sala'), P('proyecto')));
+        let cab = '';
+        if (!sala) {
+          // Sala del proyecto: se une sin invitación; si no existe, la crea permanente.
+          if (!slug(proyecto)) throw new ErrorBro(T.nombreSinLetras());
+          sala = almacen.salaDeProyecto(proyecto);
+          if (sala) cab = T.salaDeProyecto(slug(proyecto), sala, false);
+          else {
+            validarFicha(args.ficha);
+            texto(args, 'dossier', { obligatorio: true, max: MAX_DOSSIER, min: 40 });
+            const datos = { tema: proyecto, nombre: proyecto, limite: almacen.limitePorDefecto, creador: yo, permanente: true, proyecto };
+            // Dos sesiones del proyecto pueden llegar a la vez: la segunda espera a la sala de la primera.
+            let meta = almacen.existeSala(slug(proyecto)) ? null : almacen.crearSala({ ...datos, exacto: true });
+            if (!meta) {
+              for (let i = 0; i < 30 && !almacen.salaDeProyecto(proyecto); i++) await dormir(100);
+              sala = almacen.salaDeProyecto(proyecto);
+              if (!sala) meta = almacen.crearSala(datos); // la del mismo nombre está cerrada: otra con id libre
+            }
+            if (meta) { sala = meta.id; cab = T.salaDeProyecto(slug(proyecto), sala, true); } else cab = T.salaDeProyecto(slug(proyecto), sala, false);
+          }
+        }
         almacen.exigirSala(sala);
-        return unirseInterno({ sala, yo: validarNombre(args.yo), ficha: args.ficha, dossier: args.dossier, retomar: !!args.retomar });
+        const st0 = almacen.estadoSala(sala);
+        const ya = st0.participantes.get(slug(yo));
+        // Por proyecto, volver a entrar con el mismo nombre es retomar si es la misma sesión (mismo id_sesion)
+        // o si quien tenía ese nombre está inactivo (p. ej., la sesión se reinició). Si está activo, es otra sesión.
+        const mismaSesion = !!(ya && args.ficha?.id_sesion && ya.ficha?.id_sesion && String(args.ficha.id_sesion).trim() === String(ya.ficha.id_sesion).trim());
+        const retomar = !!args.retomar || (!!proyecto && !!ya && (mismaSesion || almacen.presenciaDe(sala, ya.nombre).estado === 'inactivo'));
+        const salida = unirseInterno({ sala, yo, ficha: args.ficha, dossier: args.dossier, retomar });
+        extra.salaYo = { sala, yo: ya ? ya.nombre : yo };
+        return cab ? `${cab}\n\n${salida}` : salida;
       }
 
       case 'bro_actualizar': {
@@ -697,8 +811,15 @@ export function crearHerramientas(ctx) {
         const anadido = texto(args, 'anadir_al_dossier', { max: MAX_DOSSIER });
         const resumen = texto(args, 'resumen_cambios', { max: 500 });
         const cambiaSala = typeof args.sala_permanente === 'boolean' && args.sala_permanente !== st.permanente;
-        if (!Object.keys(cambios).length && !nuevo && !anadido && !cambiaSala) throw new ErrorBro(T.nadaQueActualizar());
+        const proyectoNuevo = typeof args.sala_proyecto === 'string' ? (slug(args.sala_proyecto) || null) : undefined;
+        const cambiaProyecto = proyectoNuevo !== undefined && proyectoNuevo !== (st.proyecto || null);
+        if (!Object.keys(cambios).length && !nuevo && !anadido && !cambiaSala && !cambiaProyecto) throw new ErrorBro(T.nadaQueActualizar());
         const l = [];
+        extra.salaYo = { sala, yo: p.nombre };
+        if (cambiaProyecto) {
+          almacen.anotar(sala, { tipo: 'sala', accion: 'proyecto', valor: proyectoNuevo, de: p.nombre });
+          l.push(proyectoNuevo ? T.salaAhoraDeProyecto(proyectoNuevo, P('proyecto'), H('bro_unirse')) : T.salaSinProyecto());
+        }
         if (cambiaSala) {
           almacen.anotar(sala, { tipo: 'sala', accion: 'permanente', valor: args.sala_permanente, de: p.nombre });
           l.push(args.sala_permanente ? T.salaAhoraPermanente() : T.salaAhoraTemporal());
@@ -772,6 +893,7 @@ export function crearHerramientas(ctx) {
           if (refs.length) entrada.resuelve = refs;
         }
         const e = almacen.anotar(sala, entrada);
+        extra.salaYo = { sala, yo: p.nombre };
         const st2 = almacen.estadoSala(sala);
         const l = [T.enviado(e.n, V(clase), para ? para.join(', ') : T.todos(), st2.permanente ? null : `${st2.mensajes}/${st2.limite}`)];
         if (clase === 'encargo') {
@@ -782,7 +904,8 @@ export function crearHerramientas(ctx) {
         if (para && ['encargo', 'pregunta', 'peticion'].includes(clase)) {
           for (const x of para) {
             const d = st2.participantes.get(slug(x));
-            if (d?.ficha?.id_sesion && slug(d.nombre) !== slug(p.nombre)) l.push(T.avisoNativo(d.ficha.id_sesion));
+            if (!d?.ficha?.id_sesion || slug(d.nombre) === slug(p.nombre) || p.ficha?.id_sesion) continue;
+            if (almacen.presenciaDe(sala, d.nombre).estado !== 'escuchando') l.push(T.avisoNativo(d.ficha.id_sesion));
           }
         }
         if (entrada.tarea) l.push(`${entrada.tarea.id} → ${V(entrada.tarea.estado)}.`);
@@ -805,6 +928,7 @@ export function crearHerramientas(ctx) {
         const p = exigirParticipante(almacen.estadoSala(sala), yo);
         const segundos = entero(args, 'segundos', { def: ESPERA_POR_DEFECTO, min: 0, max: ESPERA_MAXIMA });
         const r = await recogerNovedades({ sala, yo: p.nombre, segundos, signal: extra.signal, progreso: extra.progreso });
+        extra.salaYo = { sala, yo: p.nombre };
         return textoNovedades(r, { yo: p.nombre, segundos });
       }
 
@@ -815,6 +939,7 @@ export function crearHerramientas(ctx) {
         const st = almacen.estadoSala(sala);
         const p = exigirParticipante(st, yo);
         const notas = [];
+        extra.salaYo = { sala, yo: p.nombre };
         if (args.nuevo || args.cambiar) exigirAbierta(st, { permitirPausa: true });
         if (args.nuevo) {
           const n = args.nuevo;
@@ -894,7 +1019,7 @@ export function crearHerramientas(ctx) {
         const empezarEn = entero(args, 'empezar_en', { def: null, min: 0, max: 1e9 });
         const { meta, tomados } = almacen.tomarNumeros({ serie, de: yo, sala, motivo, cantidad, empezarEn, prefijo: prefijo || null });
         const etiquetas = tomados.map((r) => r.etiqueta);
-        if (sala) almacen.anotar(sala, { tipo: 'numero', de: yo, serie: meta.serie, etiquetas, motivo });
+        if (sala) { almacen.anotar(sala, { tipo: 'numero', de: yo, serie: meta.serie, etiquetas, motivo }); extra.salaYo = { sala, yo }; }
         return T.numerosTomados(etiquetas.join(', '), meta.serie, `${meta.prefijo || ''}${tomados[tomados.length - 1].n + 1}`);
       }
 
@@ -948,7 +1073,7 @@ export function crearHerramientas(ctx) {
         const l = [];
         if (!salas.length) l.push(args.incluir_cerradas ? T.noHaySalas() : T.noHaySalasAbiertas(P('incluir_cerradas')));
         for (const s of salas) {
-          l.push(`- ${T.cita(s.id)} · ${V(s.estado)}${s.permanente ? ` · ${T.permanente()}` : ''} · ${s.tema} · ${s.permanente ? T.mensajesSinLimite(s.mensajes) : `${s.mensajes}/${s.limite}`} · ${T.participantesMin()}: ${s.participantes.join(', ') || T.nadie()} · ${T.ultimaActividad(hace(s.ultimaActividad))}`);
+          l.push(`- ${T.cita(s.id)} · ${V(s.estado)}${s.permanente ? ` · ${T.permanente()}` : ''}${s.proyecto ? ` · ${T.proyectoL(s.proyecto)}` : ''} · ${s.tema} · ${s.permanente ? T.mensajesSinLimite(s.mensajes) : `${s.mensajes}/${s.limite}`} · ${T.participantesMin()}: ${s.participantes.join(', ') || T.nadie()} · ${T.ultimaActividad(hace(s.ultimaActividad))}`);
         }
         const huerf = textoHuerfanas(null, 5);
         if (huerf) l.push('', huerf);
@@ -987,8 +1112,14 @@ export function crearHerramientas(ctx) {
 
   async function ejecutar(nombre, args, extra) {
     const canon = NOMBRE_ES[nombre] || nombre;
+    const info = extra || {};
     try {
-      const salida = await manejar(canon, normalizarArgs(args || {}), extra || {});
+      let salida = await manejar(canon, normalizarArgs(args || {}), info);
+      if (info.salaYo) {
+        let t = [];
+        try { t = timbres(info.salaYo.sala, info.salaYo.yo); } catch (e) { console.error('[hey-bro] timbres:', e); }
+        if (t.length) salida = `${salida}\n\n${t.join('\n')}`;
+      }
       return { content: [{ type: 'text', text: salida }] };
     } catch (e) {
       const msg = e instanceof ErrorBro ? e.message : T.errorInterno(e?.message || String(e));
