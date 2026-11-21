@@ -2,7 +2,7 @@
 
 **Let your Claude sessions work as siblings.** hey Bro! is a Claude Desktop extension (local MCP server) that lets
 several Claude sessions on the same PC — Claude Desktop chats, Cowork tasks and Claude Code — coordinate on their own:
-they share their full context, split the work, hand tasks to each other and keep going without waiting for you.
+they share their full context, split the work, hand tasks to each other, wake each other up and keep going without waiting for you.
 
 [Español](README.es.md) · MIT · Windows, macOS, Linux · English / Español
 
@@ -29,7 +29,9 @@ remembering who is doing what, answering the same question twice. hey Bro! remov
 7. **"For you" inbox + system notifications** for what really needs you: answer, mark as done, or see what was decided without you.
 8. **Live local viewer** at http://127.0.0.1:4520: conversation, profiles, dossiers, board; write as moderator, pause, close or download the transcript.
 9. **Initiative**: stalled assignments are flagged, and rooms where a sibling has been waiting alone for 2+ hours (nobody joined) are offered to the others.
-10. **Bilingual**: English and Spanish tools, texts and viewer (automatic or set in the settings).
+10. **Projects without invitations**: every session of a project joins the project's room on its own (`project`).
+11. **Doorbells**: siblings wake each other up with native messaging (Claude Code sessions on the same PC) when something is waiting for them.
+12. **Bilingual**: English and Spanish tools, texts and viewer (automatic or set in the settings).
 
 | "For you" inbox | Board with a queued reservation |
 |---|---|
@@ -70,6 +72,8 @@ Claude Code does not load Desktop extensions, so register the same server as an 
 Useful phrases: *"pass this to your sibling"*, *"what is your sibling doing?"*, *"stay on call in room X"*,
 *"make this room permanent"*, *"close the room"*.
 
+In a project you do not even need the invitation: see [Proactive projects](#proactive-projects-no-nudging).
+
 ## How autonomy works
 
 - Anything reversible within a sibling's scope: it decides and logs it.
@@ -80,13 +84,34 @@ Useful phrases: *"pass this to your sibling"*, *"what is your sibling doing?"*, 
 - **Never by default**: deleting, sending, publishing, paying or anything irreversible or outward. Those always need your
   confirmation in the session that does them.
 
+## Proactive projects (no nudging)
+
+Goal: the sessions of a project work together without you carrying messages or nudging them.
+
+1. **One room per project.** Each session joins with `project` instead of an invitation; the room is created (permanent) the first time.
+   To reuse an existing room, tag it with `bro_update` + `room_project`.
+2. **Doorbells.** Claude Code sessions on the same PC put their `session_id` (the name ListAgents gives them) in their profile.
+   When something is waiting for an idle sibling (an assignment, a question or request for them, a notice, a moderator message),
+   the next session that uses hey Bro gets a ready-made `SendMessage` and sends it; the sibling wakes up, goes into the room and handles it.
+   Each doorbell is logged in the room, is not repeated while unread, is retried after 10 minutes and is reported after 3 attempts.
+3. **Project instructions.** Add a paragraph like this one to your project's instructions, so every task joins when it starts and
+   handles assignments and doorbells without waiting for you:
+
+   > This project coordinates through hey Bro!. When any task starts: use the hey-bro skill, call ListAgents and join with
+   > `bro_join` (project: "my-project"), with your session name in `session_id`. Handle the assignments and the "hey Bro: …"
+   > messages from the other sessions of the project without waiting for me, and send the doorbells hey Bro asks for.
+   > Confirm with me anything irreversible or outward (deleting, sending, publishing, paying).
+
+Limits: a regular Claude Desktop chat cannot be woken up (it only acts when you write to it); if every session is idle,
+the first one to move wakes the others; all tasks of a project should use the same permission mode.
+
 ## Tools
 
 | English | Spanish | What for |
 |---|---|---|
 | `bro_create_room` | `bro_crear_sala` | Create a room (optionally permanent) and get the invitation |
-| `bro_join` | `bro_unirse` | Join with profile + dossier; read the siblings' ones |
-| `bro_update` | `bro_actualizar` | Update status, dossier, or make the room permanent |
+| `bro_join` | `bro_unirse` | Join with profile + dossier (or by `project`, no invitation); read the siblings' ones |
+| `bro_update` | `bro_actualizar` | Update status, dossier; make the room permanent or tag its project |
 | `bro_send` | `bro_enviar` | Messages, questions, assignments, deliveries, logs |
 | `bro_wait` | `bro_esperar` | Collect news; long-poll up to 50 s |
 | `bro_board` | `bro_tablero` | Tasks, queued reservations, decisions |
@@ -126,8 +151,11 @@ In Cowork the tools appear with the prefix `mcp__remote-devices__hey_Bro___` (th
 
 - Sessions must run on the same PC (they share the rooms folder) while it is on.
 - A session only "hears" while it is working: Claude Desktop chats work turn by turn, so give them short,
-  self-contained tasks; Cowork and Claude Code can stay listening or on call. Where native session messaging exists
-  (`ListAgents`/`SendMessage`, in Cowork and Claude Code), a sibling can also be woken with a one-line doorbell.
+  self-contained tasks; Cowork and Claude Code can stay listening or on call, and Claude Code sessions on the same PC can be
+  woken by a doorbell (native messaging: `ListAgents`/`SendMessage`). A regular chat cannot be woken up.
+- Cowork tasks run in separate cloud machines and do not see each other in `ListAgents` (checked Nov 2026): doorbells do not
+  reach them. Use Claude Code for siblings that must wake each other, or have Cowork tasks schedule their own check-ins.
+- hey Bro itself cannot send a doorbell: a session that is working sends it. If every session is idle, the first one to move wakes the others.
 - `bro_wait` waits 50 s at most per call (Claude Desktop cuts tool calls at about 60 s).
 
 ## Under the hood

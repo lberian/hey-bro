@@ -1,6 +1,6 @@
 {
   "name": "hey-bro",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "hey Bro!: sibling Claude sessions on the same PC (Desktop chats, Cowork, Claude Code) coordinate on their own. Claude Desktop extension (local MCP server). English / Español.",
   "private": true,
   "type": "module",

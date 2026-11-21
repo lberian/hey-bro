@@ -2,7 +2,7 @@
 
 **Haz que tus sesiones de Claude trabajen como hermanos.** hey Bro! es una extensión de Claude Desktop (servidor MCP local)
 que permite a varias sesiones de Claude del mismo PC —chats de Claude Desktop, tareas de Cowork y Claude Code—
-coordinarse solas: comparten todo su contexto, se reparten el trabajo, se encargan tareas y siguen adelante sin esperarte.
+coordinarse solas: comparten todo su contexto, se reparten el trabajo, se encargan tareas, se despiertan entre ellas y siguen adelante sin esperarte.
 
 [English](README.md) · MIT · Windows, macOS, Linux · Español / English
 
@@ -29,7 +29,9 @@ recuerdas quién hace qué y respondes dos veces a lo mismo. hey Bro! te quita e
 7. **Bandeja «Para ti» y avisos del sistema** para lo que de verdad te necesita: responder, darlo por hecho o ver qué se decidió sin ti.
 8. **Visor local en directo** en http://127.0.0.1:4520: conversación, fichas, dossiers y tablero; escribir como moderador, pausar, cerrar o descargar la transcripción.
 9. **Iniciativa**: se señalan los encargos parados y se ofrecen a los demás las salas donde un hermano lleva 2 h o más esperando solo (no se unió nadie).
-10. **Bilingüe**: herramientas, textos y visor en español e inglés (automático o fijado en los ajustes).
+10. **Proyectos sin invitaciones**: cada sesión de un proyecto entra sola en la sala del proyecto (`proyecto`).
+11. **Timbres**: los hermanos se despiertan entre ellos con la mensajería nativa (sesiones de Claude Code del mismo PC) cuando algo les espera.
+12. **Bilingüe**: herramientas, textos y visor en español e inglés (automático o fijado en los ajustes).
 
 | Bandeja «Para ti» | Tablero con una reserva en cola |
 |---|---|
@@ -71,6 +73,8 @@ Claude Code no carga las extensiones de Desktop, así que registra el mismo serv
 Frases útiles: *«pásale esto a tu hermano»*, *«¿qué está haciendo tu hermano?»*, *«ponte de guardia en la sala X»*,
 *«haz que esta sala sea permanente»*, *«cerrad la sala»*.
 
+En un proyecto ni siquiera hace falta la invitación: ver [Proyectos proactivos](#proyectos-proactivos-sin-ir-moviéndolas).
+
 ## Cómo funciona la autonomía
 
 - Lo reversible y del ámbito de un hermano: lo decide y lo anota.
@@ -81,13 +85,34 @@ Frases útiles: *«pásale esto a tu hermano»*, *«¿qué está haciendo tu her
 - **Nunca por defecto**: borrar, enviar, publicar, pagar o cualquier cosa irreversible o hacia fuera. Eso siempre necesita
   tu confirmación en la sesión que lo hace.
 
+## Proyectos proactivos (sin ir moviéndolas)
+
+Objetivo: que las sesiones de un proyecto trabajen juntas sin que tengas que llevar recados ni ir moviéndolas.
+
+1. **Una sala por proyecto.** Cada sesión entra con `proyecto` en vez de con una invitación; la sala se crea (permanente) la primera vez.
+   Para usar una sala que ya existe, márcala con `bro_actualizar` + `sala_proyecto`.
+2. **Timbres.** Las sesiones de Claude Code del mismo PC ponen en su ficha su `id_sesion` (el nombre que les da ListAgents).
+   Cuando algo espera a un hermano parado (un encargo, una pregunta o petición para él, un aviso, un mensaje del moderador),
+   la siguiente sesión que use hey Bro recibe un `SendMessage` ya preparado y lo envía; el hermano se despierta, entra en la sala y lo atiende.
+   Cada timbre queda anotado en la sala, no se repite mientras no lo lea, se reintenta a los 10 minutos y tras 3 intentos se avisa.
+3. **Instrucciones del proyecto.** Añade a las instrucciones de tu proyecto un párrafo como este, para que cada tarea entre al empezar
+   y atienda encargos y timbres sin esperarte:
+
+   > Este proyecto se coordina con hey Bro!. Al empezar cualquier tarea: usa la skill hey-bro, llama a ListAgents y únete con
+   > `bro_unirse` (proyecto: «mi-proyecto»), con tu nombre de sesión en `id_sesion`. Atiende sin esperar a que te lo diga los encargos
+   > y los mensajes «hey Bro: …» de las otras sesiones del proyecto, y envía los timbres que te pida hey Bro.
+   > Lo irreversible o hacia fuera (borrar, enviar, publicar, pagar), confírmamelo antes.
+
+Límites: un chat normal de Claude Desktop no se puede despertar (solo actúa cuando le escribes); si todas las sesiones están paradas,
+la primera que se mueva despierta a las demás; todas las tareas de un proyecto deben usar el mismo modo de permisos.
+
 ## Herramientas
 
 | Español | Inglés | Para qué |
 |---|---|---|
 | `bro_crear_sala` | `bro_create_room` | Crear una sala (también permanente) y obtener la invitación |
-| `bro_unirse` | `bro_join` | Entrar con ficha y dossier; leer los de los hermanos |
-| `bro_actualizar` | `bro_update` | Actualizar estado y dossier, o hacer la sala permanente |
+| `bro_unirse` | `bro_join` | Entrar con ficha y dossier (o por `proyecto`, sin invitación); leer los de los hermanos |
+| `bro_actualizar` | `bro_update` | Actualizar estado y dossier; hacer la sala permanente o marcar su proyecto |
 | `bro_enviar` | `bro_send` | Mensajes, preguntas, encargos, entregas, bitácora |
 | `bro_esperar` | `bro_wait` | Recoger novedades; espera de hasta 50 s |
 | `bro_tablero` | `bro_board` | Tareas, reservas con cola, decisiones |
@@ -127,8 +152,11 @@ En Cowork las herramientas aparecen con el prefijo `mcp__remote-devices__hey_Bro
 
 - Las sesiones deben estar en el mismo PC (comparten la carpeta de las salas) y con el PC encendido.
 - Una sesión solo «oye» mientras trabaja: los chats de Claude Desktop trabajan por turnos, así que dales encargos
-  cortos y autocontenidos; Cowork y Claude Code pueden quedarse escuchando o de guardia. Donde hay mensajería nativa
-  entre sesiones (`ListAgents`/`SendMessage`, en Cowork y Claude Code), también se puede despertar a un hermano con un timbre de una línea.
+  cortos y autocontenidos; Cowork y Claude Code pueden quedarse escuchando o de guardia, y las sesiones de Claude Code del
+  mismo PC pueden despertarse con un timbre (mensajería nativa: `ListAgents`/`SendMessage`). Un chat normal no se puede despertar.
+- Las tareas de Cowork funcionan en máquinas separadas en la nube y no se ven en `ListAgents` (comprobado en nov-2026): el timbre
+  no les llega. Usa Claude Code para los hermanos que deban despertarse, o que las tareas de Cowork se programen sus propias rondas.
+- hey Bro no puede tocar el timbre por sí mismo: lo envía una sesión que esté trabajando. Si todas están paradas, la primera que se mueva despierta a las demás.
 - `bro_esperar` espera como máximo 50 s por llamada (Claude Desktop corta las llamadas hacia los 60 s).
 
 ## Por dentro

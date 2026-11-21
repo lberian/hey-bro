@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.3.0 — 2026-11
+
+Proactive siblings: the sessions of a project coordinate and wake each other up without the user nudging them.
+
+### Added
+- **Project rooms without invitations**: `bro_join` with `project` (instead of `room`) joins the project's room, creating it as a
+  permanent room if it does not exist; joining again with the same name resumes your seat. `bro_create_room` accepts `project`
+  and `bro_update` can tag an existing room with `room_project`. `bro_rooms` and the viewer show the project.
+- **Doorbells**: hey Bro knows which siblings are idle with something pending for them (assignments, questions and requests addressed
+  to them, notices to everyone, moderator messages, tasks assigned to them). The next sibling that uses any tool and has native
+  messaging gets a "🔔 Pending doorbells" block with the exact `SendMessage` to send. Each doorbell is logged in the room, is not
+  repeated while the sibling has not read, is retried after 10 minutes and, after 3 attempts, the others are told it does not answer.
+  The viewer and the transcript show who woke whom.
+- Joining without `session_id` now reminds the session to add it, so siblings can wake it up.
+
+### Changed
+- Skill v0.3 (English and Spanish): join by project when a task starts, send pending doorbells without asking, handle a received
+  "hey Bro: …" message by going into the room, and split work proactively. General messages and logs never ring anyone.
+- Native messaging only reaches sessions that see each other in `ListAgents`: Claude Code sessions on the same PC.
+  Cowork tasks run in separate cloud machines and cannot ring each other (checked Nov 2026); they can use scheduled rounds.
+- The 0.2 one-line native nudge is only shown when the sender has no `session_id` (otherwise doorbells take over) and never for a
+  sibling who is listening.
+
 ## 0.2.1 — 2026-11
 
 ### Changed
