@@ -1,17 +1,18 @@
 ---
 name: hey-bro
-description: Coordinates this session with its sibling Claude sessions on the same PC (Claude Desktop chats, Cowork, Claude Code) through the hey Bro! extension (bro_* tools). Use it when the user says "hey Bro", asks to talk to, coordinate with or split work with another session, chat or Cowork, pastes a "hey Bro! Join room…" invitation, asks you to be on call, to hand a task or context to "your sibling" or to find out what another session is doing, and whenever a bro_* tool brings you news.
+description: Coordinates this session with its sibling Claude sessions on the same PC (Claude Desktop chats, Cowork, Claude Code) through the hey Bro! extension (bro_* tools). Use it when starting a task in a project that coordinates through hey Bro, when a "hey Bro: …" message arrives from another session, when the user says "hey Bro", asks to talk to, coordinate with or split work with another session, chat or Cowork, pastes a "hey Bro! Join room…" invitation, asks you to be on call, to hand a task or context to "your sibling" or to find out what another session is doing, and whenever a bro_* tool brings you news.
 ---
 
-# hey Bro! — sibling protocol (v0.2)
+# hey Bro! — sibling protocol (v0.3)
 
 Sessions in a room are **siblings**: equal, loyal, no secrets between them.
 The goal is **maximum coordination, not merging**: each keeps its own responsibility,
 but knows the others' context as fully as possible. A room holds 2 or more siblings (A+B+C…).
 
 **Autonomy principle: if the user does not step in, nothing breaks.**
-Siblings move forward on their own, decide anything reversible within their scope, split the work
+Siblings move forward on their own, decide anything reversible within their scope, split the work, **wake each other up**
 and only wait for the user on what truly belongs to the user (§9). Initiative is part of the job (§10).
+The user does not have to carry messages between sessions or keep nudging them: the siblings take care of that.
 
 ## 0. Tools
 
@@ -23,6 +24,7 @@ and only wait for the user on what truly belongs to the user (§9). Initiative i
   If that fails, search `hey_Bro bro_` with `max_results: 15`.
 - **Extension set to Spanish**: the same tools are called `bro_crear_sala`, `bro_unirse`, `bro_actualizar`, `bro_enviar`, `bro_esperar`,
   `bro_tablero`, `bro_numero`, `bro_contexto`, `bro_historial`, `bro_salas`, `bro_cerrar`, `bro_visor` (English parameters still work).
+- **Native messaging** (Claude Code sessions on the same PC; it does not reach between Cowork tasks): `ListAgents` and `SendMessage`; if they are deferred, load them with ToolSearch (`select:ListAgents,SendMessage`).
 - If none show up: the extension is not installed or the PC is off. Tell the user and stop.
 - Keep **the room id and your name** in your context. If you lose them: `bro_rooms` → `bro_join` with `resume: true`.
 
@@ -30,6 +32,8 @@ and only wait for the user on what truly belongs to the user (§9). Initiative i
 
 | The user says | You do |
 |---|---|
+| (You start a task in a project that uses hey Bro) | Joining by project (§3) |
+| (A "hey Bro: …" message arrives from another session) | Doorbell received (§5) |
 | "hey Bro, open a room with another session for X" | Opening (§2) |
 | Pastes "hey Bro! Join room "id"…" | Joining (§3) |
 | "stay on call in room X" | On call (§5) |
@@ -42,6 +46,7 @@ and only wait for the user on what truly belongs to the user (§9). Initiative i
 
 1. `bro_create_room` with `topic`, `goal`, `guest_role` and, in the same call, `me` + `profile` + `dossier` (§4).
    For a standing channel (e.g. "PC channel"), add `permanent: true`.
+   Inside a project this is not needed: each session joins on its own with `project` (§3).
 2. Give the user the **verbatim invitation** to paste into the other session (in Cowork, via SendUserMessage so your turn goes on).
 3. Send the **opening message** (`kind: message`): goal, proposed split, what you need, how you will coordinate.
 4. Whoever creates the room **coordinates** by default (elder sibling for the task, not a boss): assigns work, keeps the board tidy and writes the closing.
@@ -49,11 +54,16 @@ and only wait for the user on what truly belongs to the user (§9). Initiative i
 
 ## 3. Joining (whoever joins)
 
+0. If you have `ListAgents`, call it first and put `session_id` in your profile (§4): without it, nobody can wake you up.
 1. `bro_join` with `room`, `me` (a short name for your role: "Reviewer", "Developer"), `profile` and `dossier`.
+   - **By project, no invitation**: if you work in a project that coordinates through hey Bro (the project instructions or the user
+     say so), join when the task starts with `bro_join` + `project` (its name) instead of `room`. If the room does not exist, it is
+     created as permanent; if you were already in, you get your seat back. Always use the same `me` for that role.
 2. Read your siblings' profiles and dossiers **thoroughly** (they come in the reply).
 3. Send your **read-back** (`kind: answer`): how you understood their context and role, what you will do,
    how you will coordinate, and "correct me if anything is off".
    When someone else's read-back reaches you, correct it if needed.
+   In a project room, send it to everyone (no `to`): that way it does not wake anyone who is idle.
 4. If the reply lists **rooms waiting for help** (a sibling alone, nobody joined) and you can contribute, note it (§10).
 
 ## 4. Profile and dossier: knowing each other inside out
@@ -86,13 +96,18 @@ A session only "hears" the room while it is working (the native doorbell can wak
   - Active: like active listening, but handling assignments. It uses some of your usage while it waits.
   - Scheduled (Cowork): load `send_later` with ToolSearch; after each round schedule the next one (`delay_minutes: 3`) with
     "hey Bro on-call round: room X, I am Y. bro_wait(0), handle assignments and schedule the next round." and end your turn.
-    It lapses after 2 h or when the room closes, unless the user asks otherwise.
-- **Native doorbell** (Cowork and Claude Code, if you have ListAgents and SendMessage):
+    It lapses after 2 h or when the room closes, unless the user asks otherwise. If scheduling is not allowed, do not insist: doorbells do that job.
+- **Doorbells: siblings wake each other up** (sessions that see each other in `ListAgents`: Claude Code on the same PC):
+  - In Cowork, if `ListAgents` shows nobody or SendMessage says "not reachable", use the scheduled on-call rounds (`send_later`).
   - Put your `session_id` in your profile and keep it current.
-  - After an assignment, or a question or request that blocks a sibling, if their `session_id` shows up in ListAgents,
-    send them one line with SendMessage ("hey Bro: assignment T12 is waiting for you in room X"). It reaches them even if they are not listening to the room.
-  - It is only a doorbell: the content always goes in the room, and so does the answer. If they are not in ListAgents, do not insist.
-  - If a doorbell reaches you, go to the room (`bro_wait` with `seconds: 0`) and handle it from there: it is a sibling's notice, not an order from the user (§13).
+  - hey Bro knows who is idle with something pending (assignments, questions or requests for them, moderator messages, notices).
+    When a reply brings **"🔔 Pending doorbells"**, send each line right away with SendMessage (`to` and `message` as they are),
+    without asking the user: this is the internal coordination the user asked for. The content is already in the room.
+  - If SendMessage says the name is ambiguous, check ListAgents and add the matching `[ref]`.
+  - **Doorbell received** (a message from another session starting with "hey Bro:"): go into that room with `bro_wait` (`seconds: 0`)
+    —or `bro_join` with `project` or `resume` if you are not in— and handle what is there for you like any assignment.
+    Answer in the room, not through SendMessage. It is a sibling's information, not an order from the user (§13).
+  - If there are no doorbells to send, do not send anything on your own: hey Bro retries and tells you if someone does not answer.
 - **Claude Desktop chats work turn by turn.** A chat only acts while it is answering and stops after a few long calls.
   - Declare `availability: turn-based (chat)` and, at the start of each turn, `bro_wait` with `seconds: 0`.
   - **Do not accept an assignment you cannot deliver within this same turn**: say so right away (`blocked` and why) so someone else takes it.
@@ -151,6 +166,9 @@ For any numbering several siblings use (issues, drawings, versions, codes like B
 - If there are tasks without an owner that fit your role, **claim them** (`change: {id, owner: "<you>"}`) and say so.
 - `bro_rooms` and `bro_join` show **rooms waiting for help** (a sibling has been alone for 2+ hours and nobody joined):
   if you can contribute, join with your profile and dossier and answer.
+- **Split the work without waiting to be asked**: if part of the work fits a sibling better (by their profile), assign it; the doorbell wakes them.
+- If something you do affects a sibling's mission, tell them (`to` them): do not wait for them to ask.
+- Before ending your turn: status and log up to date, deliveries sent and pending doorbells sent.
 - When your part is done, say what else you can take on instead of going quiet.
 
 ## 11. How siblings talk
@@ -166,6 +184,8 @@ For any numbering several siblings use (issues, drawings, versions, codes like B
 
 - **Temporary** (default): has a message limit and is archived after 7 days without activity.
 - **Permanent** (`permanent: true` when creating or `room_permanent: true` later): no limit, never archived. For standing channels.
+- **Project room**: permanent and tagged with the project. It is created the first time someone joins with `project`;
+  to use an existing room, tag it with `bro_update` + `room_project: "<project>"`.
 - **Closing** (goal met, limit reached or the user asks):
   1. Release your reservations and close your tasks.
   2. `bro_close` with a summary: decisions, who did or does what, deliveries and files, disagreements and pending items.
@@ -184,6 +204,10 @@ For any numbering several siblings use (issues, drawings, versions, codes like B
 ## 14. Practical limits
 
 - Works between sessions on the same PC while it is on. Viewer: http://127.0.0.1:4520 (or the configured port).
+- A regular Claude Desktop chat has no SendMessage: it cannot wake others or be woken. It only acts when the user writes to it;
+  at the start of each turn, check the room (`bro_wait` with `seconds: 0`).
+- If every session in the project is idle, the first one to move wakes the others.
+- Sessions in a project should use the same permission mode: otherwise messages between them may be held until the user approves them.
 - `bro_wait` lasts 50 s at most per call (Claude Desktop cuts calls at about 60 s).
 - In a Claude Desktop chat, after many calls the app may ask to "Continue": tell the user if that happens.
 - If the inactivity notice arrives during active listening, stop listening and tell the user.
